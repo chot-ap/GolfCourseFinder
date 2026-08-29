@@ -313,12 +313,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // 日付 | ゴルフ場名 | 笹塚からの電車の所要時間 | クラブバス送迎有無 | 神田からの車での所要時間 |
       tr.innerHTML = `
         <td class="cell-date">
-          ${course.date}
+          <a href="${course.planReserveUrl}" target="_blank" rel="noopener noreferrer" class="date-link" title="${course.name} の ${course.date} プラン予約ページを開く">
+            <span class="date-text">📅 ${course.date}</span>
+            <span class="date-reserve-tag">予約 ↗</span>
+          </a>
         </td>
         <td class="cell-course">
-          <a href="${course.detailUrl}" target="_blank" rel="noopener noreferrer" class="course-title-link">
-            ${course.name}
-            <span style="font-size: 0.75rem; color: var(--accent);">↗</span>
+          <a href="${course.coursePageUrl}" target="_blank" rel="noopener noreferrer" class="course-title-link" title="${course.name} のゴルフ場詳細ページを開く">
+            <span>${course.name}</span>
+            <span class="link-arrow">↗</span>
           </a>
           <div class="course-meta">
             <span class="rating-badge">★ ${course.ratingDisplay}</span>
@@ -347,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ${course.minPrice ? '¥' + course.minPrice.toLocaleString() + '<span>〜</span>' : 'プラン参照'}
           </div>
           <button class="btn btn-secondary btn-sm btn-detail" style="margin-top: 0.35rem;" data-id="${course.id}">
-            詳細プラン
+            詳細 / プラン
           </button>
         </td>
       `;
@@ -446,9 +449,12 @@ document.addEventListener('DOMContentLoaded', () => {
         ${plansHtml}
       </div>
 
-      <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
-        <a href="${course.detailUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
-          楽天GORAで予約・詳細確認 ↗
+      <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap;">
+        <a href="${course.coursePageUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+          🏛️ ゴルフ場公式案内ページ ↗
+        </a>
+        <a href="${course.planReserveUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+          ⛳ ${course.date} のプラン予約へ進む ↗
         </a>
       </div>
     `;

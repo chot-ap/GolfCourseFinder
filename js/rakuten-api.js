@@ -156,16 +156,35 @@ const RakutenGoraAPI = (() => {
         lunch: p.lunch === 1 || p.lunch === '1' || (p.planName && p.planName.includes('昼食付'))
       }));
 
+      // プレー日フォーマット (YYYYMMDD)
+      const playDateStr = params.playDate || new Date().toISOString().split('T')[0];
+      const playDateCompact = playDateStr.replace(/-/g, '');
+      const courseId = golfCourse.golfCourseId;
+
+      // ゴルフ場詳細ページURL
+      const coursePageUrl = golfCourse.golfCourseDetailUrl || 
+        `https://gora.golf.rakuten.co.jp/single/course_detail/index.html?c_id=${courseId}`;
+
+      // プラン予約ページURL（指定日予約）
+      const firstPlanUrl = planInfoList.length > 0 && (planInfoList[0].planDetailUrl || planInfoList[0].reserveUrl)
+        ? (planInfoList[0].planDetailUrl || planInfoList[0].reserveUrl)
+        : null;
+      const planReserveUrl = firstPlanUrl || 
+        `https://gora.golf.rakuten.co.jp/single/plan_list/index.html?c_id=${courseId}&play_date=${playDateCompact}`;
+
       filtered.push({
-        id: golfCourse.golfCourseId,
-        date: params.playDate || new Date().toISOString().split('T')[0],
+        id: courseId,
+        date: playDateStr,
         name: courseName,
         abbr: courseAbbr,
         rating: rating,
         ratingDisplay: rating > 0 ? rating.toFixed(1) : '評価なし',
         address: golfCourse.address || '',
         imageUrl: golfCourse.golfCourseImageUrl || '',
-        detailUrl: golfCourse.golfCourseDetailUrl || `https://gora.golf.rakuten.co.jp/`,
+        // リンクURL
+        coursePageUrl: coursePageUrl,      // ゴルフ場ページ
+        planReserveUrl: planReserveUrl,    // プラン予約ページ
+        detailUrl: coursePageUrl,
         highway: golfCourse.highway || '',
         // 指定フォーマット必須項目
         trainTransit: trainTransit, // 笹塚からの電車の所要時間

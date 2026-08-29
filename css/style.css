@@ -433,10 +433,48 @@ select.form-control option {
 
 /* Specific Cell Formatting */
 .cell-date {
-  font-weight: 700;
-  color: var(--text-primary);
   white-space: nowrap;
   font-feature-settings: "tnum";
+}
+
+.date-link {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-decoration: none;
+  color: var(--text-primary);
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  transition: all var(--transition-fast);
+}
+
+.date-link:hover {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+}
+
+.date-text {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #fff;
+}
+
+.date-reserve-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--primary-light);
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  letter-spacing: 0.02em;
 }
 
 .cell-course {
@@ -444,17 +482,31 @@ select.form-control option {
 }
 
 .course-title-link {
-  color: #fff;
+  color: #ffffff;
   font-weight: 700;
   font-size: 1rem;
   text-decoration: none;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  transition: color var(--transition-fast);
+  transition: all var(--transition-fast);
+  padding: 0.2rem 0;
+  border-bottom: 1px solid transparent;
 }
 
 .course-title-link:hover {
+  color: var(--primary-light);
+  border-bottom-color: var(--primary-light);
+}
+
+.course-title-link .link-arrow {
+  font-size: 0.8rem;
+  color: var(--accent);
+  transition: transform var(--transition-fast);
+}
+
+.course-title-link:hover .link-arrow {
+  transform: translate(2px, -2px);
   color: var(--primary-light);
 }
 
