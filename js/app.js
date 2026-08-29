@@ -3,19 +3,33 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // DOM Elements
+  // DOM Elements - Calendar
   const searchForm = document.getElementById('searchForm');
   const inputPlayDate = document.getElementById('inputPlayDate');
   const selectedDateDisplay = document.getElementById('selectedDateDisplay');
   const selectedDateText = document.getElementById('selectedDateText');
   const calendarWidget = document.getElementById('calendarWidget');
-  const calMonthTitle = document.getElementById('calMonthTitle');
+  const calYearSelect = document.getElementById('calYearSelect');
+  const calMonthSelect = document.getElementById('calMonthSelect');
   const calendarDaysGrid = document.getElementById('calendarDaysGrid');
   const btnPrevMonth = document.getElementById('btnPrevMonth');
   const btnNextMonth = document.getElementById('btnNextMonth');
+  const btnCalToday = document.getElementById('btnCalToday');
+  const btnCalNextSat = document.getElementById('btnCalNextSat');
+  const btnCalClose = document.getElementById('btnCalClose');
 
+  // DOM Elements - Area & Prefectures (Picklist)
   const selectArea = document.getElementById('selectArea');
-  const selectPref = document.getElementById('selectPref');
+  const prefPicklistWrapper = document.getElementById('prefPicklistWrapper');
+  const prefPicklistTrigger = document.getElementById('prefPicklistTrigger');
+  const prefPicklistPlaceholder = document.getElementById('prefPicklistPlaceholder');
+  const prefPicklistDropdown = document.getElementById('prefPicklistDropdown');
+  const prefPicklistOptions = document.getElementById('prefPicklistOptions');
+  const selectedPrefTags = document.getElementById('selectedPrefTags');
+  const btnSelectAllPrefs = document.getElementById('btnSelectAllPrefs');
+  const btnClearAllPrefs = document.getElementById('btnClearAllPrefs');
+
+  // DOM Elements - Time Chips & Conditions
   const timeChipsContainer = document.getElementById('timeChipsContainer');
   const btnSelectAllTimes = document.getElementById('btnSelectAllTimes');
   const btnClearAllTimes = document.getElementById('btnClearAllTimes');
@@ -23,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectMinRating = document.getElementById('selectMinRating');
   const inputExclude = document.getElementById('inputExclude');
 
+  // DOM Elements - Results & Modals
   const resultsSection = document.getElementById('resultsSection');
   const resultsTableBody = document.getElementById('resultsTableBody');
   const resultsCount = document.getElementById('resultsCount');
@@ -34,7 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnExportCsv = document.getElementById('btnExportCsv');
   const btnSettings = document.getElementById('btnSettings');
 
-  // Modals
   const exportModal = document.getElementById('exportModal');
   const settingsModal = document.getElementById('settingsModal');
   const detailModal = document.getElementById('detailModal');
@@ -51,12 +65,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedDate = new Date();
   let calCurrentYear = selectedDate.getFullYear();
   let calCurrentMonth = selectedDate.getMonth(); // 0-indexed
-  let selectedStartTimes = ['08', '09']; // デフォルト選択
+  let selectedPrefCodes = []; // 選択された都道府県コード（空配列なら全県）
+  let selectedStartTimes = ['08', '09']; // デフォルト選択時間帯
 
-  // 都道府県リスト（エリア別）
-  const PREFECTURES = {
+  // 都道府県マスターデータ（エリア別）
+  const PREFECTURES_BY_AREA = {
     '8': [ // 関東
-      { code: '', name: 'すべての県（関東全域）' },
       { code: '12', name: '千葉県' },
       { code: '11', name: '埼玉県' },
       { code: '14', name: '神奈川県' },
@@ -66,13 +80,11 @@ document.addEventListener('DOMContentLoaded', () => {
       { code: '13', name: '東京都' }
     ],
     '9': [ // 甲信越
-      { code: '', name: 'すべての県（甲信越全域）' },
       { code: '19', name: '山梨県' },
       { code: '20', name: '長野県' },
       { code: '15', name: '新潟県' }
     ],
     '10': [ // 東海・中部
-      { code: '', name: 'すべての県（東海・中部全域）' },
       { code: '22', name: '静岡県' },
       { code: '23', name: '愛知県' },
       { code: '21', name: '岐阜県' },
@@ -87,18 +99,18 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   function init() {
     initDatePicker();
-    initCalendar();
+    initCalendarWidget();
+    initPrefecturePicklist();
     initTimeChips();
-    initPrefectureSelect();
     initEventListeners();
     updateApiStatusDisplay();
 
-    // 初回自動検索（デモ・サンプル検索）
+    // 初回検索実行
     performSearch();
   }
 
   /**
-   * 日付ピッカーの初期化（次の土曜日をデフォルト設定）
+   * プレー日ピッカーの初期化（次の土曜日をデフォルト設定）
    */
   function initDatePicker() {
     const today = new Date();
@@ -118,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateStr = formatDate(selectedDate);
     inputPlayDate.value = dateStr;
 
-    // 表示用テキストの更新
+    // 表示テキスト
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth() + 1;
     const day = selectedDate.getDate();
@@ -127,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     calCurrentYear = selectedDate.getFullYear();
     calCurrentMonth = selectedDate.getMonth();
+    updateCalendarSelects();
     renderCalendarDays();
   }
 
@@ -140,10 +153,39 @@ document.addEventListener('DOMContentLoaded', () => {
   /**
    * カレンダーウィジェットの初期化
    */
-  function initCalendar() {
-    renderCalendarDays();
+  function initCalendarWidget() {
+    // 年・月セレクトボックスの初期化
+    const currentYear = new Date().getFullYear();
+    calYearSelect.innerHTML = '';
+    for (let y = currentYear - 1; y <= currentYear + 3; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = `${y}年`;
+      calYearSelect.appendChild(opt);
+    }
 
-    // カレンダー開閉トグル
+    calMonthSelect.innerHTML = '';
+    for (let m = 0; m < 12; m++) {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = `${m + 1}月`;
+      calMonthSelect.appendChild(opt);
+    }
+
+    updateCalendarSelects();
+
+    // 年月変更イベント
+    calYearSelect.addEventListener('change', () => {
+      calCurrentYear = parseInt(calYearSelect.value, 10);
+      renderCalendarDays();
+    });
+
+    calMonthSelect.addEventListener('change', () => {
+      calCurrentMonth = parseInt(calMonthSelect.value, 10);
+      renderCalendarDays();
+    });
+
+    // カレンダー開閉
     selectedDateDisplay.addEventListener('click', (e) => {
       e.stopPropagation();
       const isOpen = calendarWidget.classList.contains('open');
@@ -154,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // 前月・次月ボタン
+    // 前月・次月
     btnPrevMonth.addEventListener('click', (e) => {
       e.stopPropagation();
       calCurrentMonth--;
@@ -162,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         calCurrentMonth = 11;
         calCurrentYear--;
       }
+      updateCalendarSelects();
       renderCalendarDays();
     });
 
@@ -172,10 +215,36 @@ document.addEventListener('DOMContentLoaded', () => {
         calCurrentMonth = 0;
         calCurrentYear++;
       }
+      updateCalendarSelects();
       renderCalendarDays();
     });
 
-    // カレンダーの外側クリックで閉じる
+    // カレンダーフッターアクション
+    btnCalToday.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setSelectedDate(new Date());
+      closeCalendar();
+      performSearch();
+    });
+
+    btnCalNextSat.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const today = new Date();
+      const nextSaturday = new Date(today);
+      const dayOfWeek = today.getDay();
+      const daysUntilSaturday = (6 - dayOfWeek + 7) % 7 || 7;
+      nextSaturday.setDate(today.getDate() + daysUntilSaturday);
+      setSelectedDate(nextSaturday);
+      closeCalendar();
+      performSearch();
+    });
+
+    btnCalClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeCalendar();
+    });
+
+    // 外部クリックでカレンダー閉じる
     document.addEventListener('click', (e) => {
       if (!calendarWidget.contains(e.target) && !selectedDateDisplay.contains(e.target)) {
         closeCalendar();
@@ -184,8 +253,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function openCalendar() {
+    closePrefPicklist();
     calendarWidget.classList.add('open');
     selectedDateDisplay.classList.add('active');
+    updateCalendarSelects();
     renderCalendarDays();
   }
 
@@ -194,11 +265,15 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedDateDisplay.classList.remove('active');
   }
 
+  function updateCalendarSelects() {
+    calYearSelect.value = calCurrentYear;
+    calMonthSelect.value = calCurrentMonth;
+  }
+
   /**
-   * カレンダーグリッドの日付セルを描画
+   * カレンダーの日付グリッドを描画
    */
   function renderCalendarDays() {
-    calMonthTitle.textContent = `${calCurrentYear}年 ${calCurrentMonth + 1}月`;
     calendarDaysGrid.innerHTML = '';
 
     const firstDay = new Date(calCurrentYear, calCurrentMonth, 1).getDay();
@@ -206,14 +281,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 月初前の空セル
+    // 月初前の空白セル
     for (let i = 0; i < firstDay; i++) {
       const emptyCell = document.createElement('div');
       emptyCell.className = 'cal-day-cell empty';
       calendarDaysGrid.appendChild(emptyCell);
     }
 
-    // 各日のセル
+    // 各日付セル
     for (let d = 1; d <= daysInMonth; d++) {
       const dayDate = new Date(calCurrentYear, calCurrentMonth, d);
       dayDate.setHours(0, 0, 0, 0);
@@ -239,19 +314,153 @@ document.addEventListener('DOMContentLoaded', () => {
         cell.classList.add('selected');
       }
 
-      // 過去日の判定（無効化）
-      if (dayDate < today) {
-        cell.classList.add('disabled');
-      } else {
-        cell.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setSelectedDate(dayDate);
-          closeCalendar();
-          performSearch();
-        });
-      }
+      // 日付クリックで選択
+      cell.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setSelectedDate(dayDate);
+        closeCalendar();
+        performSearch();
+      });
 
       calendarDaysGrid.appendChild(cell);
+    }
+  }
+
+  /**
+   * 都道府県ピックリスト（複数選択）の初期化
+   */
+  function initPrefecturePicklist() {
+    renderPrefPicklistOptions();
+
+    // ピックリスト開閉
+    prefPicklistTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = prefPicklistDropdown.classList.contains('open');
+      if (isOpen) {
+        closePrefPicklist();
+      } else {
+        openPrefPicklist();
+      }
+    });
+
+    // エリア変更時
+    selectArea.addEventListener('change', () => {
+      selectedPrefCodes = [];
+      renderPrefPicklistOptions();
+      updatePrefPicklistUI();
+      performSearch();
+    });
+
+    // 全選択ボタン
+    btnSelectAllPrefs.addEventListener('click', () => {
+      const area = selectArea.value || '8';
+      const prefs = PREFECTURES_BY_AREA[area] || [];
+      selectedPrefCodes = prefs.map(p => p.code);
+      renderPrefPicklistOptions();
+      updatePrefPicklistUI();
+      performSearch();
+    });
+
+    // 全解除ボタン
+    btnClearAllPrefs.addEventListener('click', () => {
+      selectedPrefCodes = [];
+      renderPrefPicklistOptions();
+      updatePrefPicklistUI();
+      performSearch();
+    });
+
+    // 外部クリックでピックリスト閉じる
+    document.addEventListener('click', (e) => {
+      if (!prefPicklistWrapper.contains(e.target)) {
+        closePrefPicklist();
+      }
+    });
+  }
+
+  function openPrefPicklist() {
+    closeCalendar();
+    prefPicklistDropdown.classList.add('open');
+    prefPicklistTrigger.classList.add('active');
+  }
+
+  function closePrefPicklist() {
+    prefPicklistDropdown.classList.remove('open');
+    prefPicklistTrigger.classList.remove('active');
+  }
+
+  /**
+   * 都道府県チェックリストの描画
+   */
+  function renderPrefPicklistOptions() {
+    const area = selectArea.value || '8';
+    const prefs = PREFECTURES_BY_AREA[area] || [];
+
+    prefPicklistOptions.innerHTML = '';
+
+    prefs.forEach(p => {
+      const isChecked = selectedPrefCodes.includes(p.code);
+      const label = document.createElement('label');
+      label.className = `picklist-item ${isChecked ? 'checked' : ''}`;
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = p.code;
+      checkbox.checked = isChecked;
+
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          if (!selectedPrefCodes.includes(p.code)) selectedPrefCodes.push(p.code);
+        } else {
+          selectedPrefCodes = selectedPrefCodes.filter(c => c !== p.code);
+        }
+        renderPrefPicklistOptions();
+        updatePrefPicklistUI();
+        performSearch();
+      });
+
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(p.name));
+      prefPicklistOptions.appendChild(label);
+    });
+
+    updatePrefPicklistUI();
+  }
+
+  /**
+   * ピックリストのプレースホルダーと選択タグ表示の更新
+   */
+  function updatePrefPicklistUI() {
+    const area = selectArea.value || '8';
+    const allPrefs = PREFECTURES_BY_AREA[area] || [];
+    const areaName = selectArea.options[selectArea.selectedIndex]?.text || '';
+
+    selectedPrefTags.innerHTML = '';
+
+    if (selectedPrefCodes.length === 0) {
+      prefPicklistPlaceholder.textContent = `すべての県（${areaName}全域）`;
+    } else if (selectedPrefCodes.length === allPrefs.length) {
+      prefPicklistPlaceholder.textContent = `すべての県（${allPrefs.length}県選択中）`;
+    } else {
+      const selectedNames = allPrefs
+        .filter(p => selectedPrefCodes.includes(p.code))
+        .map(p => p.name);
+
+      prefPicklistPlaceholder.textContent = `${selectedNames.join(', ')} (${selectedNames.length}県)`;
+
+      // タグ表示
+      allPrefs.filter(p => selectedPrefCodes.includes(p.code)).forEach(p => {
+        const tag = document.createElement('span');
+        tag.className = 'pref-tag';
+        tag.innerHTML = `${p.name} <span class="tag-remove" title="削除">✕</span>`;
+        tag.querySelector('.tag-remove').addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectedPrefCodes = selectedPrefCodes.filter(c => c !== p.code);
+          renderPrefPicklistOptions();
+          updatePrefPicklistUI();
+          performSearch();
+        });
+        selectedPrefTags.appendChild(tag);
+      });
     }
   }
 
@@ -309,33 +518,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * 地域選択に応じた都道府県ドロップダウンの更新
-   */
-  function initPrefectureSelect() {
-    const area = selectArea.value || '8';
-    const prefs = PREFECTURES[area] || PREFECTURES['8'];
-
-    selectPref.innerHTML = '';
-    prefs.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.code;
-      opt.textContent = p.name;
-      selectPref.appendChild(opt);
-    });
-  }
-
-  /**
    * イベントリスナーの登録
    */
   function initEventListeners() {
-    // 地域変更
-    selectArea.addEventListener('change', () => {
-      initPrefectureSelect();
-    });
-
     // 検索フォーム送信
     searchForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      closeCalendar();
+      closePrefPicklist();
       performSearch();
     });
 
@@ -434,7 +624,6 @@ document.addEventListener('DOMContentLoaded', () => {
    * 検索の実行
    */
   async function performSearch() {
-    // ローディング表示
     loadingState.style.display = 'flex';
     emptyState.style.display = 'none';
     resultsTable.style.display = 'none';
@@ -442,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const params = {
       playDate: inputPlayDate.value || formatDate(selectedDate),
       areaCode: selectArea.value,
-      prefCode: selectPref.value,
+      prefCodes: selectedPrefCodes, // 複数選択された都道府県コード配列
       startTimes: selectedStartTimes, // 複数選択された時間帯配列
       minRating: parseFloat(selectMinRating.value || 3.5),
       excludeKeyword: inputExclude.value.trim() || 'アコーディア'
@@ -529,7 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </a>
         </td>
         <td class="cell-course">
-          <a href="${course.coursePageUrl}" target="_blank" rel="noopener noreferrer" class="course-title-link" title="${course.name} のゴルフ場詳細ページを開く">
+          <a href="${course.coursePageUrl}" target="_blank" rel="noopener noreferrer" class="course-title-link" title="${course.name} のゴルフ場公式詳細ページを開く">
             <span>${course.name}</span>
             <span class="link-arrow">↗</span>
           </a>

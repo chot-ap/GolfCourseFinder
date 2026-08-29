@@ -49,68 +49,87 @@ const RakutenGoraAPI = (() => {
     }
 
     try {
-      // 1. ローカルプロキシまたは直接API呼び出し
-      const queryParams = new URLSearchParams({
-        applicationId: appId,
-        format: 'json',
-        playDate: params.playDate, // YYYY-MM-DD
-        hits: '30',
-        page: params.page || '1',
-        sort: 'evaluation'
+      // 複数県が選択されている場合、各県ごとに並行リクエストを実行して統合
+      const prefCodes = params.prefCodes && params.prefCodes.length > 0 
+        ? params.prefCodes 
+        : (params.prefCode ? [params.prefCode] : ['']);
+
+      const fetchPromises = prefCodes.map(pref => fetchSingleQuery(appId, { ...params, prefCode: pref }));
+      const resultsArray = await Promise.all(fetchPromises);
+
+      // 全結果のフラット化と重複排除（courseIdベース）
+      const courseMap = new Map();
+      resultsArray.flat().forEach(item => {
+        const id = item.golfCourse ? item.golfCourse.golfCourseId : item.golfCourseId;
+        if (id && !courseMap.has(id)) {
+          courseMap.set(id, item);
+        }
       });
 
-      if (params.areaCode) queryParams.append('areaCode', params.areaCode);
-      if (params.prefCode) queryParams.append('prefCode', params.prefCode);
-
-      // 複数選択された時間帯からAPIの開始・終了時間を設定
-      if (params.startTimes && Array.isArray(params.startTimes) && params.startTimes.length > 0) {
-        const sortedTimes = [...params.startTimes].map(t => parseInt(t, 10)).sort((a, b) => a - b);
-        const minHour = sortedTimes[0];
-        const maxHour = sortedTimes[sortedTimes.length - 1];
-        queryParams.append('startTime', String(minHour).padStart(2, '0'));
-        queryParams.append('endTime', String(maxHour).padStart(2, '0'));
-      } else if (params.startTime) {
-        queryParams.append('startTime', params.startTime);
-      }
-
-      if (params.minPrice) queryParams.append('minPrice', params.minPrice);
-      if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
-
-      let data;
-      // プロキシエンドポイントの試行
-      try {
-        const proxyUrl = `/api/plan-search?${queryParams.toString()}`;
-        const proxyResp = await fetch(proxyUrl);
-        if (proxyResp.ok) {
-          data = await proxyResp.json();
-        } else {
-          throw new Error('Proxy failed');
-        }
-      } catch (proxyErr) {
-        // 直接楽天API（JSONPまたはFetch）
-        const directUrl = `${PLAN_SEARCH_ENDPOINT}?${queryParams.toString()}`;
-        const resp = await fetch(directUrl);
-        if (!resp.ok) {
-          const errData = await resp.json().catch(() => ({}));
-          throw new Error(errData.error_description || `APIエラー: ステータス ${resp.status}`);
-        }
-        data = await resp.json();
-      }
-
-      if (!data || !data.Items || !Array.isArray(data.Items)) {
-        return [];
-      }
-
-      // 2. データのマッピングとフィルタリング
-      const rawCourses = data.Items.map(item => item.Item);
-      return processAndFilterCourses(rawCourses, params);
+      const uniqueItems = Array.from(courseMap.values());
+      return processAndFilterCourses(uniqueItems, params);
     } catch (err) {
       console.warn('API呼び出し失敗。デモデータにフォールバックします:', err);
-      // API呼び出しでエラーが起きた場合は通知とともにデモデータを返す
       const fallbackResults = await simulateSearch(params);
       fallbackResults._apiError = err.message;
       return fallbackResults;
     }
+  }
+
+  /**
+   * 単一クエリのAPIリクエスト実行
+   */
+  async function fetchSingleQuery(appId, params) {
+    const queryParams = new URLSearchParams({
+      applicationId: appId,
+      format: 'json',
+      playDate: params.playDate, // YYYY-MM-DD
+      hits: '30',
+      page: params.page || '1',
+      sort: 'evaluation'
+    });
+
+    if (params.areaCode) queryParams.append('areaCode', params.areaCode);
+    if (params.prefCode) queryParams.append('prefCode', params.prefCode);
+
+    // 複数選択された時間帯からAPIの開始・終了時間を設定
+    if (params.startTimes && Array.isArray(params.startTimes) && params.startTimes.length > 0) {
+      const sortedTimes = [...params.startTimes].map(t => parseInt(t, 10)).sort((a, b) => a - b);
+      const minHour = sortedTimes[0];
+      const maxHour = sortedTimes[sortedTimes.length - 1];
+      queryParams.append('startTime', String(minHour).padStart(2, '0'));
+      queryParams.append('endTime', String(maxHour).padStart(2, '0'));
+    } else if (params.startTime) {
+      queryParams.append('startTime', params.startTime);
+    }
+
+    if (params.minPrice) queryParams.append('minPrice', params.minPrice);
+    if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
+
+    let data;
+    try {
+      const proxyUrl = `/api/plan-search?${queryParams.toString()}`;
+      const proxyResp = await fetch(proxyUrl);
+      if (proxyResp.ok) {
+        data = await proxyResp.json();
+      } else {
+        throw new Error('Proxy failed');
+      }
+    } catch (proxyErr) {
+      const directUrl = `${PLAN_SEARCH_ENDPOINT}?${queryParams.toString()}`;
+      const resp = await fetch(directUrl);
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error_description || `APIエラー: ステータス ${resp.status}`);
+      }
+      data = await resp.json();
+    }
+
+    if (!data || !data.Items || !Array.isArray(data.Items)) {
+      return [];
+    }
+
+    return data.Items.map(item => item.Item);
   }
 
   /**
@@ -123,12 +142,11 @@ const RakutenGoraAPI = (() => {
   function processAndFilterCourses(items, params) {
     const minRating = params.minRating !== undefined ? parseFloat(params.minRating) : 3.5;
     const excludeKeyword = (params.excludeKeyword || 'アコーディア').trim();
-    const selectedTimes = params.startTimes || []; // 例: ['08', '09']
+    const selectedTimes = params.startTimes || [];
 
     const filtered = [];
 
     items.forEach(item => {
-      // 楽天GORAプラン検索のデータ構造に対応
       const golfCourse = item.golfCourse || item;
       const planInfoList = item.planInfo || [];
 
@@ -186,16 +204,19 @@ const RakutenGoraAPI = (() => {
       const playDateCompact = playDateStr.replace(/-/g, '');
       const courseId = golfCourse.golfCourseId;
 
-      // ゴルフ場詳細ページURL
-      const coursePageUrl = golfCourse.golfCourseDetailUrl || 
-        `https://gora.golf.rakuten.co.jp/single/course_detail/index.html?c_id=${courseId}`;
+      // ゴルフ場詳細公式ページURL（正規URLの生成）
+      const validDetailUrl = (golfCourse.golfCourseDetailUrl && !golfCourse.golfCourseDetailUrl.endsWith('.jp/'))
+        ? golfCourse.golfCourseDetailUrl
+        : `https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/${courseId}/`;
 
-      // プラン予約ページURL（指定日予約）
+      const coursePageUrl = validDetailUrl;
+
+      // プラン予約ページURL（指定日予約URLの生成）
       const firstPlanUrl = planInfoList.length > 0 && (planInfoList[0].planDetailUrl || planInfoList[0].reserveUrl)
         ? (planInfoList[0].planDetailUrl || planInfoList[0].reserveUrl)
         : null;
       const planReserveUrl = firstPlanUrl || 
-        `https://gora.golf.rakuten.co.jp/single/plan_list/index.html?c_id=${courseId}&play_date=${playDateCompact}`;
+        `https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/${courseId}/play_date/${playDateCompact}`;
 
       filtered.push({
         id: courseId,
@@ -207,7 +228,7 @@ const RakutenGoraAPI = (() => {
         address: golfCourse.address || '',
         imageUrl: golfCourse.golfCourseImageUrl || '',
         // リンクURL
-        coursePageUrl: coursePageUrl,      // ゴルフ場ページ
+        coursePageUrl: coursePageUrl,      // ゴルフ場詳細ページ
         planReserveUrl: planReserveUrl,    // プラン予約ページ
         detailUrl: coursePageUrl,
         highway: golfCourse.highway || '',
@@ -250,7 +271,7 @@ const RakutenGoraAPI = (() => {
   function getMockDatabase() {
     return [
       {
-        golfCourseId: 120001,
+        golfCourseId: 120077,
         golfCourseName: 'ムーンレイクゴルフクラブ 市原コース',
         golfCourseAbbr: 'ムーンレイク市原',
         prefCode: '12',
@@ -262,14 +283,14 @@ const RakutenGoraAPI = (() => {
         highway: '館山自動車道/市原ICより5km',
         clubBus: 'なし（JR内房線・五井駅よりタクシー約15分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120077/',
         planInfo: [
           { planId: 101, planName: '【キャディ付・昼食付】快適乗用カートプラン', price: 14800, callTime: '08:00', lunch: true },
           { planId: 102, planName: '【セルフ・昼食付】GPSナビ付カート', price: 9800, callTime: '08:35', lunch: true }
         ]
       },
       {
-        golfCourseId: 120002,
+        golfCourseId: 120025,
         golfCourseName: '房総カントリークラブ 房総ゴルフ場',
         golfCourseAbbr: '房総CC',
         prefCode: '12',
@@ -281,14 +302,14 @@ const RakutenGoraAPI = (() => {
         highway: '首都圏中央連絡自動車道/市原鶴舞ICより12km',
         clubBus: 'あり（JR外房線・茂原駅南口よりクラブバス運行 ※要予約）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120025/',
         planInfo: [
           { planId: 103, planName: '【日本プロ開催コース】東コース セルフ昼食付', price: 16500, callTime: '07:45', lunch: true },
           { planId: 104, planName: '西コースGPSナビ付乗用カートセルフ', price: 11000, callTime: '08:20', lunch: false }
         ]
       },
       {
-        golfCourseId: 120003,
+        golfCourseId: 120058,
         golfCourseName: 'ミルフィーユゴルフクラブ',
         golfCourseAbbr: 'ミルフィーユGC',
         prefCode: '12',
@@ -300,14 +321,14 @@ const RakutenGoraAPI = (() => {
         highway: '京葉道路/蘇我ICより15km',
         clubBus: 'あり（JR内房線・浜野駅東口より毎日クラブバス運行）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120058/',
         planInfo: [
           { planId: 105, planName: '【平日限定】シェフ特製ランチバイキング付', price: 8900, callTime: '08:15', lunch: true }
         ]
       },
       {
-        golfCourseId: 120004,
-        golfCourseName: 'アコーディア・ゴルフ 習志野カントリークラブ', // 除外対象テスト用
+        golfCourseId: 120015,
+        golfCourseName: 'アコーディア・ゴルフ 習志野カントリークラブ',
         golfCourseAbbr: 'アコーディア習志野',
         prefCode: '12',
         areaCode: '8',
@@ -318,10 +339,11 @@ const RakutenGoraAPI = (() => {
         highway: '東関東自動車道/千葉北ICより18km',
         clubBus: 'あり（JR成田線・木下駅より運行）',
         golfCourseImageUrl: '',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120015/',
         planInfo: [{ planId: 106, planName: 'トーナメントコースプラン', price: 25000, callTime: '08:00', lunch: true }]
       },
       {
-        golfCourseId: 120005,
+        golfCourseId: 120054,
         golfCourseName: 'カメリアヒルズカントリークラブ',
         golfCourseAbbr: 'カメリアヒルズCC',
         prefCode: '12',
@@ -333,13 +355,13 @@ const RakutenGoraAPI = (() => {
         highway: '東京湾アクアライン連絡道/袖ヶ浦ICより5km',
         clubBus: 'あり（JR内房線・木更津駅東口より予約制送迎バス）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120054/',
         planInfo: [
           { planId: 107, planName: '【アースモンダミンカップ開催】名門キャディ付プラン', price: 28500, callTime: '08:30', lunch: true }
         ]
       },
       {
-        golfCourseId: 110001,
+        golfCourseId: 110034,
         golfCourseName: '飯能くすの樹カントリー倶楽部',
         golfCourseAbbr: '飯能くすの樹CC',
         prefCode: '11',
@@ -351,13 +373,13 @@ const RakutenGoraAPI = (() => {
         highway: '圏央道/狭山日高ICより10km',
         clubBus: 'あり（西武池袋線・飯能駅北口より定期クラブバス運行）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/110034/',
         planInfo: [
           { planId: 108, planName: '【乗用カートセルフ】昼食＆ドリンクバー付', price: 11500, callTime: '08:05', lunch: true }
         ]
       },
       {
-        golfCourseId: 110002,
+        golfCourseId: 110033,
         golfCourseName: '武蔵丘ゴルフコース',
         golfCourseAbbr: '武蔵丘GC',
         prefCode: '11',
@@ -369,28 +391,13 @@ const RakutenGoraAPI = (() => {
         highway: '圏央道/狭山日高ICより6km',
         clubBus: 'あり（西武池袋線・飯能駅よりクラブバス運行 ※約10分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/110033/',
         planInfo: [
           { planId: 109, planName: '【トーナメント開催】樋口久子三菱電機レディスコース', price: 17800, callTime: '08:15', lunch: true }
         ]
       },
       {
-        golfCourseId: 110003,
-        golfCourseName: '低レートサンプルゴルフクラブ', // レート3.5未満除外テスト用
-        golfCourseAbbr: '低レートサンプル',
-        prefCode: '11',
-        areaCode: '8',
-        address: '埼玉県秩父郡...',
-        latitude: 36.0123,
-        longitude: 139.1234,
-        evaluation: '3.2',
-        highway: '関越自動車道/花園ICより20km',
-        clubBus: 'なし',
-        golfCourseImageUrl: '',
-        planInfo: [{ planId: 110, planName: '格安セルフプラン', price: 4500, callTime: '07:30', lunch: false }]
-      },
-      {
-        golfCourseId: 140001,
+        golfCourseId: 140018,
         golfCourseName: '大厚木カントリークラブ 本コース',
         golfCourseAbbr: '大厚木本コース',
         prefCode: '14',
@@ -402,13 +409,13 @@ const RakutenGoraAPI = (() => {
         highway: '東名高速道路/厚木ICより12km (圏央道/厚木西ICより8km)',
         clubBus: 'あり（小田急線・本厚木駅北口よりクラブバス運行）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/140018/',
         planInfo: [
           { planId: 111, planName: '【桜・楓コース】GPSナビ付カート・昼食付', price: 13500, callTime: '07:50', lunch: true }
         ]
       },
       {
-        golfCourseId: 140002,
+        golfCourseId: 140023,
         golfCourseName: '小田原湯本カントリークラブ',
         golfCourseAbbr: '小田原湯本CC',
         prefCode: '14',
@@ -420,13 +427,13 @@ const RakutenGoraAPI = (() => {
         highway: '小田原厚木道路/小田原西ICより5km',
         clubBus: 'あり（箱根登山鉄道・箱根湯本駅よりクラブバス約7分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/140023/',
         planInfo: [
           { planId: 112, planName: '箱根温泉リゾート・絶景富士山ビュープラン', price: 15900, callTime: '08:25', lunch: true }
         ]
       },
       {
-        golfCourseId: 80001,
+        golfCourseId: 80016,
         golfCourseName: '阿見カントリークラブ',
         golfCourseAbbr: '阿見CC',
         prefCode: '8',
@@ -438,13 +445,13 @@ const RakutenGoraAPI = (() => {
         highway: '圏央道/阿見東ICより3km',
         clubBus: 'あり（JR常磐線・荒川沖駅東口よりクラブバス運行 ※約15分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/80016/',
         planInfo: [
           { planId: 113, planName: '【インターから3分】フラット＆ワイドコース 昼食付', price: 12800, callTime: '08:10', lunch: true }
         ]
       },
       {
-        golfCourseId: 90001,
+        golfCourseId: 90035,
         golfCourseName: 'サンレイクカントリークラブ',
         golfCourseAbbr: 'サンレイクCC',
         prefCode: '9',
@@ -456,13 +463,13 @@ const RakutenGoraAPI = (() => {
         highway: '東北自動車道/宇都宮ICより15km',
         clubBus: 'なし（JR日光線・下野大沢駅よりタクシー約15分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/90035/',
         planInfo: [
           { planId: 114, planName: '【雄大な自然】美しくレイアウトされた18ホール 昼食付', price: 7900, callTime: '08:40', lunch: true }
         ]
       },
       {
-        golfCourseId: 190001,
+        golfCourseId: 190019,
         golfCourseName: '富士クラシック',
         golfCourseAbbr: '富士クラシック',
         prefCode: '19',
@@ -474,7 +481,7 @@ const RakutenGoraAPI = (() => {
         highway: '中央自動車道/河口湖ICより25km (新東名/新富士ICより30km)',
         clubBus: 'なし（富士急行線・河口湖駅よりタクシー約30分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/',
+        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/190019/',
         planInfo: [
           { planId: 115, planName: '【標高1200m富士の裾野】リンクススタイルの爽快ゴルフ 昼食付', price: 14000, callTime: '08:20', lunch: true }
         ]

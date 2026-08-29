@@ -48,20 +48,23 @@
               </label>
               
               <div class="calendar-input-wrapper">
-                <input type="date" id="inputPlayDate" class="form-control date-input-hidden" required>
                 <div class="selected-date-display" id="selectedDateDisplay" title="クリックしてカレンダーを開閉">
                   <span class="cal-icon">🗓️</span>
                   <span class="cal-text" id="selectedDateText">日付を選択</span>
                   <span class="cal-arrow">▼</span>
                 </div>
+                <input type="date" id="inputPlayDate" class="date-input-hidden" required>
               </div>
 
-              <!-- インタラクティブ・カレンダーポップオーバー / ウィジェット -->
+              <!-- インタラクティブ・カレンダーポップオーバー -->
               <div class="calendar-widget" id="calendarWidget">
                 <div class="calendar-header">
-                  <button type="button" class="btn-cal-nav" id="btnPrevMonth">◀</button>
-                  <span class="cal-month-title" id="calMonthTitle">2026年 9月</span>
-                  <button type="button" class="btn-cal-nav" id="btnNextMonth">▶</button>
+                  <button type="button" class="btn-cal-nav" id="btnPrevMonth" title="前月">◀</button>
+                  <div class="cal-month-selector">
+                    <select id="calYearSelect" class="cal-select"></select>
+                    <select id="calMonthSelect" class="cal-select"></select>
+                  </div>
+                  <button type="button" class="btn-cal-nav" id="btnNextMonth" title="次月">▶</button>
                 </div>
                 <div class="calendar-weekdays">
                   <span class="sun">日</span>
@@ -74,6 +77,11 @@
                 </div>
                 <div class="calendar-days-grid" id="calendarDaysGrid">
                   <!-- JSで動的生成 -->
+                </div>
+                <div class="calendar-footer">
+                  <button type="button" class="btn-cal-action" id="btnCalToday">今日</button>
+                  <button type="button" class="btn-cal-action" id="btnCalNextSat">次の土曜</button>
+                  <button type="button" class="btn-cal-action close" id="btnCalClose">閉じる</button>
                 </div>
               </div>
 
@@ -97,21 +105,37 @@
               </select>
             </div>
 
-            <!-- 都道府県 (県) -->
-            <div class="form-group">
-              <label for="selectPref" class="form-label">
-                📍 都道府県
-              </label>
-              <select id="selectPref" class="form-control">
-                <option value="">すべての県（関東全域）</option>
-                <option value="12">千葉県</option>
-                <option value="11">埼玉県</option>
-                <option value="14">神奈川県</option>
-                <option value="8">茨城県</option>
-                <option value="9">栃木県</option>
-                <option value="10">群馬県</option>
-                <option value="13">東京都</option>
-              </select>
+            <!-- 都道府県 (複数選択ピックリスト) -->
+            <div class="form-group form-group-pref">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label class="form-label" style="margin-bottom: 0;">
+                  📍 都道府県 <span style="font-size: 0.7rem; color: var(--accent); font-weight: normal;">(複数選択可)</span>
+                </label>
+              </div>
+
+              <div class="picklist-wrapper" id="prefPicklistWrapper">
+                <div class="picklist-trigger" id="prefPicklistTrigger">
+                  <span class="picklist-placeholder" id="prefPicklistPlaceholder">すべての県（関東全域）</span>
+                  <span class="picklist-arrow">▼</span>
+                </div>
+
+                <!-- ピックリストドロップダウン -->
+                <div class="picklist-dropdown" id="prefPicklistDropdown">
+                  <div class="picklist-header">
+                    <span style="font-weight: 700; font-size: 0.8rem; color: #fff;">都道府県を選択</span>
+                    <div class="picklist-actions">
+                      <button type="button" class="btn-picklist-action" id="btnSelectAllPrefs">全選択</button>
+                      <button type="button" class="btn-picklist-action" id="btnClearAllPrefs">解除</button>
+                    </div>
+                  </div>
+                  <div class="picklist-options-list" id="prefPicklistOptions">
+                    <!-- JSでチェックボックスを動的生成 -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- 選択中の県タグ表示 -->
+              <div class="selected-pref-tags" id="selectedPrefTags"></div>
             </div>
 
             <!-- スタート時間帯（複数選択可能） -->
