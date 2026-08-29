@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GolfCourseFinder - 楽天GORAプラン検索＆所要時間比較</title>
+  <meta name="description" content="楽天GORAプラン検索APIを活用し、笹塚からの電車所要時間、神田からの車所要時間、クラブバス有無を自動計算して最適なゴルフ場を効率的に探せる検索アプリ">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="bg-mesh"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-group">
+        <div class="brand-icon">⛳</div>
+        <div class="brand-text">
+          <h1>GolfCourseFinder</h1>
+          <p class="brand-subtitle">楽天GORAプラン検索 × 笹塚・神田アクセス最適化</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <span id="apiStatusText" style="font-size: 0.8rem; font-weight: 600;">デモ/サンプルモード</span>
+        <button id="btnSettings" class="btn btn-secondary btn-sm" title="APIキー設定">
+          ⚙️ 設定 (API Key)
+        </button>
+      </div>
+    </header>
+
+    <!-- Search Section -->
+    <main>
+      <section class="search-card">
+        <form id="searchForm">
+          <div class="search-form-grid">
+            <!-- プレー日 -->
+            <div class="form-group">
+              <label for="inputPlayDate" class="form-label">
+                📅 プレー日付 <span class="badge-req">必須</span>
+              </label>
+              <input type="date" id="inputPlayDate" class="form-control" required>
+              <div class="date-presets">
+                <button type="button" class="btn-preset" data-type="this-sat">今週土曜</button>
+                <button type="button" class="btn-preset" data-type="this-sun">今週日曜</button>
+                <button type="button" class="btn-preset" data-type="next-sat">来週土曜</button>
+              </div>
+            </div>
+
+            <!-- 地域 (エリア) -->
+            <div class="form-group">
+              <label for="selectArea" class="form-label">
+                🌏 地域エリア <span class="badge-req">必須</span>
+              </label>
+              <select id="selectArea" class="form-control">
+                <option value="8" selected>関東</option>
+                <option value="9">甲信越</option>
+                <option value="10">東海・中部</option>
+              </select>
+            </div>
+
+            <!-- 都道府県 (県) -->
+            <div class="form-group">
+              <label for="selectPref" class="form-label">
+                📍 都道府県
+              </label>
+              <select id="selectPref" class="form-control">
+                <option value="">すべての県（関東全域）</option>
+                <option value="12">千葉県</option>
+                <option value="11">埼玉県</option>
+                <option value="14">神奈川県</option>
+                <option value="8">茨城県</option>
+                <option value="9">栃木県</option>
+                <option value="10">群馬県</option>
+                <option value="13">東京都</option>
+              </select>
+            </div>
+
+            <!-- 時間帯 -->
+            <div class="form-group">
+              <label for="selectStartTime" class="form-label">
+                ⏰ スタート時間帯
+              </label>
+              <select id="selectStartTime" class="form-control">
+                <option value="">指定なし（全時間帯）</option>
+                <option value="07">〜07時台（早朝）</option>
+                <option value="08" selected>08時台（標準・人気枠）</option>
+                <option value="09">09時台</option>
+                <option value="10">10時台以降</option>
+              </select>
+            </div>
+
+            <!-- 検索ボタン -->
+            <div class="form-group">
+              <label class="form-label" style="opacity: 0;">検索</label>
+              <button type="submit" class="btn btn-primary" style="width: 100%; height: 42px;">
+                🔍 ゴルフ場を検索
+              </button>
+            </div>
+          </div>
+
+          <!-- 自動適用フィルター条件（出力条件）の表示とオプション -->
+          <div class="filter-conditions-pill">
+            <span style="font-weight: 700; color: #fff;">⚙️ 自動適用中の出力条件:</span>
+            <span class="pill-tag">★ GORA評価 3.5以上</span>
+            <span class="pill-tag danger">✕ 「アコーディア」除外</span>
+            <span style="color: var(--text-muted); margin-left: auto; font-size: 0.75rem;">
+              ※ 笹塚（電車）・神田（車）の所要時間を自動算出
+            </span>
+          </div>
+
+          <!-- 隠しパラメータ / 詳細設定 -->
+          <input type="hidden" id="selectMinRating" value="3.5">
+          <input type="hidden" id="inputExclude" value="アコーディア">
+        </form>
+      </section>
+
+      <!-- Results Section -->
+      <section id="resultsSection">
+        <div class="results-header">
+          <div class="results-count-title">
+            <h2>検索結果</h2>
+            <span class="results-count" id="resultsCount">0</span>
+            <span style="font-size: 0.85rem; color: var(--text-secondary);">件見つかりました</span>
+          </div>
+
+          <div class="results-actions">
+            <button id="btnExportFormat" class="btn btn-secondary btn-sm" title="指定フォーマットで出力">
+              📋 指定形式でコピー / 表示
+            </button>
+            <button id="btnExportCsv" class="btn btn-secondary btn-sm" title="CSVとして保存">
+              💾 CSVダウンロード
+            </button>
+          </div>
+        </div>
+
+        <!-- Results Table Container -->
+        <div class="table-container">
+          <!-- Loading Spinner -->
+          <div id="loadingState" class="state-container" style="display: none;">
+            <div class="spinner"></div>
+            <p class="state-title">ゴルフ場プランと所要時間を計算中...</p>
+            <p class="state-desc">楽天GORAプラン検索APIから最新枠を取得し、笹塚・神田からのアクセス時間を算出しています</p>
+          </div>
+
+          <!-- Empty State -->
+          <div id="emptyState" class="state-container" style="display: none;">
+            <div style="font-size: 2.5rem;">⛳</div>
+            <p class="state-title">該当するゴルフ場が見つかりませんでした</p>
+            <p class="state-desc">条件（日付、エリア、時間帯）を変更して再検索してください（レート3.5以上・非アコーディアのコースのみ表示されます）</p>
+          </div>
+
+          <!-- Table View -->
+          <table class="results-table" id="resultsTable">
+            <thead>
+              <tr>
+                <th data-sort="date">日付 ⬍</th>
+                <th data-sort="name">ゴルフ場名 ⬍</th>
+                <th data-sort="train" class="th-highlight">🚆 笹塚からの電車の所要時間 ⬍</th>
+                <th>🚌 クラブバス送迎有無</th>
+                <th data-sort="car" class="th-highlight-primary">🚗 神田からの車での所要時間 ⬍</th>
+                <th data-sort="price">プラン料金 / 詳細 ⬍</th>
+              </tr>
+            </thead>
+            <tbody id="resultsTableBody">
+              <!-- JSで動的に行を挿入 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 指定形式エクスポートモーダル -->
+  <div class="modal-overlay" id="exportModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📋 指定出力形式テキスト</h3>
+        <button class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">
+          以下のテキストはご指定のフォーマット（<code>日付|ゴルフ場名|笹塚からの電車の所要時間|クラブバス送迎有無|神田からの車での所要時間|</code>）で整形されています。
+        </p>
+        <textarea id="exportTextarea" class="export-textarea" readonly></textarea>
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button id="btnCopyExport" class="btn btn-primary">
+            テキストを一括コピー
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- API設定モーダル -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⚙️ 楽天GORA API 設定</h3>
+        <button class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="inputApiKey" class="form-label">
+            楽天 Application ID (Client ID)
+          </label>
+          <input type="text" id="inputApiKey" class="form-control" placeholder="例: 10xxxxxxxxxxxxxxxxx">
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+            Rakuten Developers（楽天ウェブサービス）で取得したアプリIDを入力すると、リアルタイムの楽天GORA実データから検索します。未入力の場合は高品質なサンプルデータで動作します。
+          </p>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+          <button id="btnClearApiKey" class="btn btn-secondary btn-sm">
+            デモモードに戻す
+          </button>
+          <button id="btnSaveApiKey" class="btn btn-primary">
+            設定を保存
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- コース詳細モーダル -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="detailModalTitle">ゴルフ場詳細</h3>
+        <button class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body" id="detailModalContent">
+        <!-- JSで動的生成 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/transit-calculator.js"></script>
+  <script src="js/rakuten-api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
