@@ -231,22 +231,20 @@ const RakutenGoraAPI = (() => {
     console.log(`🌐 [楽天OpenAPIリクエスト] パラメータ: ${queryParams.toString()}`);
 
     let data;
-    try {
-      const proxyUrl = `/api/plan-search?${queryParams.toString()}`;
-      const proxyResp = await fetch(proxyUrl);
-      if (proxyResp.ok) {
-        data = await proxyResp.json();
-      } else {
-        throw new Error('Proxy failed');
+    const proxyUrl = `/api/plan-search?${queryParams.toString()}`;
+    const proxyResp = await fetch(proxyUrl);
+    
+    if (proxyResp.ok) {
+      data = await proxyResp.json();
+    } else {
+      const errJson = await proxyResp.json().catch(() => ({}));
+      let errDetail = `HTTP ${proxyResp.status}`;
+      if (errJson.errors && errJson.errors.errorMessage) {
+        errDetail = `${errJson.errors.errorMessage} (コード: ${errJson.errors.errorCode})`;
+      } else if (errJson.error_description) {
+        errDetail = errJson.error_description;
       }
-    } catch (proxyErr) {
-      const directUrl = `${PLAN_SEARCH_ENDPOINT}?${queryParams.toString()}`;
-      const resp = await fetch(directUrl);
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error_description || `APIエラー: ステータス ${resp.status}`);
-      }
-      data = await resp.json();
+      throw new Error(`楽天API通信エラー [${errDetail}]`);
     }
 
     if (!data || !data.Items || !Array.isArray(data.Items)) {

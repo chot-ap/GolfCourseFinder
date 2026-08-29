@@ -899,6 +899,10 @@ document.addEventListener('DOMContentLoaded', () => {
       currentResults = results;
 
       loadingState.style.display = 'none';
+      if (results._apiError) {
+        showToast(`⚠️ 楽天APIエラー: ${results._apiError}`, 6000);
+      }
+
       if (results.length === 0) {
         emptyState.style.display = 'flex';
         resultsTable.style.display = 'none';
@@ -913,7 +917,7 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error(err);
       loadingState.style.display = 'none';
       emptyState.style.display = 'flex';
-      showToast('検索中にエラーが発生しました');
+      showToast(`検索エラー: ${err.message}`, 6000);
     }
   }
 
