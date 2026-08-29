@@ -61,8 +61,18 @@ const RakutenGoraAPI = (() => {
 
       if (params.areaCode) queryParams.append('areaCode', params.areaCode);
       if (params.prefCode) queryParams.append('prefCode', params.prefCode);
-      if (params.startTime) queryParams.append('startTime', params.startTime);
-      if (params.endTime) queryParams.append('endTime', params.endTime);
+
+      // 複数選択された時間帯からAPIの開始・終了時間を設定
+      if (params.startTimes && Array.isArray(params.startTimes) && params.startTimes.length > 0) {
+        const sortedTimes = [...params.startTimes].map(t => parseInt(t, 10)).sort((a, b) => a - b);
+        const minHour = sortedTimes[0];
+        const maxHour = sortedTimes[sortedTimes.length - 1];
+        queryParams.append('startTime', String(minHour).padStart(2, '0'));
+        queryParams.append('endTime', String(maxHour).padStart(2, '0'));
+      } else if (params.startTime) {
+        queryParams.append('startTime', params.startTime);
+      }
+
       if (params.minPrice) queryParams.append('minPrice', params.minPrice);
       if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
 
@@ -108,10 +118,12 @@ const RakutenGoraAPI = (() => {
    * 条件:
    * 1. Goraレート >= 3.5
    * 2. ゴルフ場名に「アコーディア」が含まれていないこと
+   * 3. 選択された時間帯プランの優先・抽出
    */
   function processAndFilterCourses(items, params) {
     const minRating = params.minRating !== undefined ? parseFloat(params.minRating) : 3.5;
     const excludeKeyword = (params.excludeKeyword || 'アコーディア').trim();
+    const selectedTimes = params.startTimes || []; // 例: ['08', '09']
 
     const filtered = [];
 
@@ -134,6 +146,19 @@ const RakutenGoraAPI = (() => {
         return;
       }
 
+      // 時間帯フィルター（選択された時間帯がある場合）
+      let matchedPlans = planInfoList;
+      if (selectedTimes.length > 0 && planInfoList.length > 0) {
+        const timeFiltered = planInfoList.filter(p => {
+          if (!p.callTime) return true;
+          const hour = p.callTime.split(':')[0];
+          return selectedTimes.includes(hour);
+        });
+        if (timeFiltered.length > 0) {
+          matchedPlans = timeFiltered;
+        }
+      }
+
       // 笹塚からの電車所要時間の計算
       const trainTransit = TransitCalculator.calculateTrainTransitTime(golfCourse);
 
@@ -144,11 +169,11 @@ const RakutenGoraAPI = (() => {
       const clubBusStatus = TransitCalculator.parseClubBusStatus(golfCourse.clubBus);
 
       // 代表的なプラン情報の抽出
-      const minPrice = planInfoList.length > 0 
-        ? Math.min(...planInfoList.map(p => p.price || 999999)) 
+      const minPrice = matchedPlans.length > 0 
+        ? Math.min(...matchedPlans.map(p => p.price || 999999)) 
         : (golfCourse.minPrice || null);
 
-      const representativePlans = planInfoList.slice(0, 3).map(p => ({
+      const representativePlans = (matchedPlans.length > 0 ? matchedPlans : planInfoList).slice(0, 3).map(p => ({
         planId: p.planId,
         planName: p.planName || '通常プレープラン',
         price: p.price,

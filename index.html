@@ -41,16 +41,47 @@
       <section class="search-card">
         <form id="searchForm">
           <div class="search-form-grid">
-            <!-- プレー日 -->
-            <div class="form-group">
+            <!-- プレー日（カレンダー選択） -->
+            <div class="form-group form-group-date">
               <label for="inputPlayDate" class="form-label">
                 📅 プレー日付 <span class="badge-req">必須</span>
               </label>
-              <input type="date" id="inputPlayDate" class="form-control" required>
+              
+              <div class="calendar-input-wrapper">
+                <input type="date" id="inputPlayDate" class="form-control date-input-hidden" required>
+                <div class="selected-date-display" id="selectedDateDisplay" title="クリックしてカレンダーを開閉">
+                  <span class="cal-icon">🗓️</span>
+                  <span class="cal-text" id="selectedDateText">日付を選択</span>
+                  <span class="cal-arrow">▼</span>
+                </div>
+              </div>
+
+              <!-- インタラクティブ・カレンダーポップオーバー / ウィジェット -->
+              <div class="calendar-widget" id="calendarWidget">
+                <div class="calendar-header">
+                  <button type="button" class="btn-cal-nav" id="btnPrevMonth">◀</button>
+                  <span class="cal-month-title" id="calMonthTitle">2026年 9月</span>
+                  <button type="button" class="btn-cal-nav" id="btnNextMonth">▶</button>
+                </div>
+                <div class="calendar-weekdays">
+                  <span class="sun">日</span>
+                  <span>月</span>
+                  <span>火</span>
+                  <span>水</span>
+                  <span>木</span>
+                  <span>金</span>
+                  <span class="sat">土</span>
+                </div>
+                <div class="calendar-days-grid" id="calendarDaysGrid">
+                  <!-- JSで動的生成 -->
+                </div>
+              </div>
+
               <div class="date-presets">
                 <button type="button" class="btn-preset" data-type="this-sat">今週土曜</button>
                 <button type="button" class="btn-preset" data-type="this-sun">今週日曜</button>
                 <button type="button" class="btn-preset" data-type="next-sat">来週土曜</button>
+                <button type="button" class="btn-preset" data-type="next-sun">来週日曜</button>
               </div>
             </div>
 
@@ -83,24 +114,41 @@
               </select>
             </div>
 
-            <!-- 時間帯 -->
-            <div class="form-group">
-              <label for="selectStartTime" class="form-label">
-                ⏰ スタート時間帯
-              </label>
-              <select id="selectStartTime" class="form-control">
-                <option value="">指定なし（全時間帯）</option>
-                <option value="07">〜07時台（早朝）</option>
-                <option value="08" selected>08時台（標準・人気枠）</option>
-                <option value="09">09時台</option>
-                <option value="10">10時台以降</option>
-              </select>
+            <!-- スタート時間帯（複数選択可能） -->
+            <div class="form-group form-group-time" style="grid-column: span 2;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <label class="form-label" style="margin-bottom: 0;">
+                  ⏰ スタート時間帯 <span style="font-size: 0.7rem; color: var(--accent); font-weight: normal;">(複数選択可)</span>
+                </label>
+                <div class="time-quick-actions">
+                  <button type="button" class="btn-time-action" id="btnSelectAllTimes">すべて選択</button>
+                  <button type="button" class="btn-time-action" id="btnClearAllTimes">解除</button>
+                </div>
+              </div>
+
+              <!-- 時間帯チップ群（複数選択トグル） -->
+              <div class="time-chips-container" id="timeChipsContainer">
+                <button type="button" class="time-chip" data-time="07">
+                  <span class="chip-check">✓</span> 〜07時台 (早朝)
+                </button>
+                <button type="button" class="time-chip active" data-time="08">
+                  <span class="chip-check">✓</span> 08時台
+                </button>
+                <button type="button" class="time-chip active" data-time="09">
+                  <span class="chip-check">✓</span> 09時台
+                </button>
+                <button type="button" class="time-chip" data-time="10">
+                  <span class="chip-check">✓</span> 10時台
+                </button>
+                <button type="button" class="time-chip" data-time="11">
+                  <span class="chip-check">✓</span> 11時台以降
+                </button>
+              </div>
             </div>
 
             <!-- 検索ボタン -->
-            <div class="form-group">
-              <label class="form-label" style="opacity: 0;">検索</label>
-              <button type="submit" class="btn btn-primary" style="width: 100%; height: 42px;">
+            <div class="form-group" style="align-self: end;">
+              <button type="submit" class="btn btn-primary" style="width: 100%; height: 44px; font-size: 0.95rem;">
                 🔍 ゴルフ場を検索
               </button>
             </div>
@@ -111,6 +159,9 @@
             <span style="font-weight: 700; color: #fff;">⚙️ 自動適用中の出力条件:</span>
             <span class="pill-tag">★ GORA評価 3.5以上</span>
             <span class="pill-tag danger">✕ 「アコーディア」除外</span>
+            <span id="selectedTimesSummary" style="color: var(--primary-light); font-weight: 600; font-size: 0.8rem;">
+              時間帯: 08時台, 09時台
+            </span>
             <span style="color: var(--text-muted); margin-left: auto; font-size: 0.75rem;">
               ※ 笹塚（電車）・神田（車）の所要時間を自動算出
             </span>

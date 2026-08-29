@@ -6,9 +6,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // DOM Elements
   const searchForm = document.getElementById('searchForm');
   const inputPlayDate = document.getElementById('inputPlayDate');
+  const selectedDateDisplay = document.getElementById('selectedDateDisplay');
+  const selectedDateText = document.getElementById('selectedDateText');
+  const calendarWidget = document.getElementById('calendarWidget');
+  const calMonthTitle = document.getElementById('calMonthTitle');
+  const calendarDaysGrid = document.getElementById('calendarDaysGrid');
+  const btnPrevMonth = document.getElementById('btnPrevMonth');
+  const btnNextMonth = document.getElementById('btnNextMonth');
+
   const selectArea = document.getElementById('selectArea');
   const selectPref = document.getElementById('selectPref');
-  const selectStartTime = document.getElementById('selectStartTime');
+  const timeChipsContainer = document.getElementById('timeChipsContainer');
+  const btnSelectAllTimes = document.getElementById('btnSelectAllTimes');
+  const btnClearAllTimes = document.getElementById('btnClearAllTimes');
+  const selectedTimesSummary = document.getElementById('selectedTimesSummary');
   const selectMinRating = document.getElementById('selectMinRating');
   const inputExclude = document.getElementById('inputExclude');
 
@@ -37,6 +48,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // State
   let currentResults = [];
   let currentSort = { column: 'rating', order: 'desc' };
+  let selectedDate = new Date();
+  let calCurrentYear = selectedDate.getFullYear();
+  let calCurrentMonth = selectedDate.getMonth(); // 0-indexed
+  let selectedStartTimes = ['08', '09']; // デフォルト選択
 
   // 都道府県リスト（エリア別）
   const PREFECTURES = {
@@ -65,11 +80,15 @@ document.addEventListener('DOMContentLoaded', () => {
     ]
   };
 
+  const WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
   /**
    * 初期化処理
    */
   function init() {
     initDatePicker();
+    initCalendar();
+    initTimeChips();
     initPrefectureSelect();
     initEventListeners();
     updateApiStatusDisplay();
@@ -88,9 +107,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const daysUntilSaturday = (6 - dayOfWeek + 7) % 7 || 7;
     nextSaturday.setDate(today.getDate() + daysUntilSaturday);
 
-    const dateStr = formatDate(nextSaturday);
+    setSelectedDate(nextSaturday);
+  }
+
+  /**
+   * 日付の設定と表示更新
+   */
+  function setSelectedDate(date) {
+    selectedDate = new Date(date);
+    const dateStr = formatDate(selectedDate);
     inputPlayDate.value = dateStr;
-    inputPlayDate.min = formatDate(today);
+
+    // 表示用テキストの更新
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth() + 1;
+    const day = selectedDate.getDate();
+    const weekday = WEEKDAYS_JA[selectedDate.getDay()];
+    selectedDateText.textContent = `${year}年${month}月${day}日 (${weekday})`;
+
+    calCurrentYear = selectedDate.getFullYear();
+    calCurrentMonth = selectedDate.getMonth();
+    renderCalendarDays();
   }
 
   function formatDate(d) {
@@ -98,6 +135,177 @@ document.addEventListener('DOMContentLoaded', () => {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * カレンダーウィジェットの初期化
+   */
+  function initCalendar() {
+    renderCalendarDays();
+
+    // カレンダー開閉トグル
+    selectedDateDisplay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = calendarWidget.classList.contains('open');
+      if (isOpen) {
+        closeCalendar();
+      } else {
+        openCalendar();
+      }
+    });
+
+    // 前月・次月ボタン
+    btnPrevMonth.addEventListener('click', (e) => {
+      e.stopPropagation();
+      calCurrentMonth--;
+      if (calCurrentMonth < 0) {
+        calCurrentMonth = 11;
+        calCurrentYear--;
+      }
+      renderCalendarDays();
+    });
+
+    btnNextMonth.addEventListener('click', (e) => {
+      e.stopPropagation();
+      calCurrentMonth++;
+      if (calCurrentMonth > 11) {
+        calCurrentMonth = 0;
+        calCurrentYear++;
+      }
+      renderCalendarDays();
+    });
+
+    // カレンダーの外側クリックで閉じる
+    document.addEventListener('click', (e) => {
+      if (!calendarWidget.contains(e.target) && !selectedDateDisplay.contains(e.target)) {
+        closeCalendar();
+      }
+    });
+  }
+
+  function openCalendar() {
+    calendarWidget.classList.add('open');
+    selectedDateDisplay.classList.add('active');
+    renderCalendarDays();
+  }
+
+  function closeCalendar() {
+    calendarWidget.classList.remove('open');
+    selectedDateDisplay.classList.remove('active');
+  }
+
+  /**
+   * カレンダーグリッドの日付セルを描画
+   */
+  function renderCalendarDays() {
+    calMonthTitle.textContent = `${calCurrentYear}年 ${calCurrentMonth + 1}月`;
+    calendarDaysGrid.innerHTML = '';
+
+    const firstDay = new Date(calCurrentYear, calCurrentMonth, 1).getDay();
+    const daysInMonth = new Date(calCurrentYear, calCurrentMonth + 1, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 月初前の空セル
+    for (let i = 0; i < firstDay; i++) {
+      const emptyCell = document.createElement('div');
+      emptyCell.className = 'cal-day-cell empty';
+      calendarDaysGrid.appendChild(emptyCell);
+    }
+
+    // 各日のセル
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayDate = new Date(calCurrentYear, calCurrentMonth, d);
+      dayDate.setHours(0, 0, 0, 0);
+
+      const cell = document.createElement('div');
+      cell.className = 'cal-day-cell';
+      cell.textContent = d;
+
+      const dayOfWeek = dayDate.getDay();
+      if (dayOfWeek === 6) cell.classList.add('sat');
+      if (dayOfWeek === 0) cell.classList.add('sun');
+
+      if (dayDate.getTime() === today.getTime()) {
+        cell.classList.add('today');
+      }
+
+      const isSelected = selectedDate &&
+        selectedDate.getFullYear() === calCurrentYear &&
+        selectedDate.getMonth() === calCurrentMonth &&
+        selectedDate.getDate() === d;
+
+      if (isSelected) {
+        cell.classList.add('selected');
+      }
+
+      // 過去日の判定（無効化）
+      if (dayDate < today) {
+        cell.classList.add('disabled');
+      } else {
+        cell.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setSelectedDate(dayDate);
+          closeCalendar();
+          performSearch();
+        });
+      }
+
+      calendarDaysGrid.appendChild(cell);
+    }
+  }
+
+  /**
+   * スタート時間帯複数選択チップの初期化
+   */
+  function initTimeChips() {
+    updateTimeChipsUI();
+
+    timeChipsContainer.querySelectorAll('.time-chip').forEach(chip => {
+      chip.addEventListener('click', (e) => {
+        const timeVal = chip.dataset.time;
+        if (selectedStartTimes.includes(timeVal)) {
+          selectedStartTimes = selectedStartTimes.filter(t => t !== timeVal);
+        } else {
+          selectedStartTimes.push(timeVal);
+          selectedStartTimes.sort();
+        }
+        updateTimeChipsUI();
+      });
+    });
+
+    btnSelectAllTimes.addEventListener('click', () => {
+      selectedStartTimes = ['07', '08', '09', '10', '11'];
+      updateTimeChipsUI();
+    });
+
+    btnClearAllTimes.addEventListener('click', () => {
+      selectedStartTimes = [];
+      updateTimeChipsUI();
+    });
+  }
+
+  /**
+   * 時間帯チップのUIおよびサマリーの更新
+   */
+  function updateTimeChipsUI() {
+    timeChipsContainer.querySelectorAll('.time-chip').forEach(chip => {
+      const timeVal = chip.dataset.time;
+      if (selectedStartTimes.includes(timeVal)) {
+        chip.classList.add('active');
+      } else {
+        chip.classList.remove('active');
+      }
+    });
+
+    if (selectedStartTimes.length === 0) {
+      selectedTimesSummary.textContent = '時間帯: 全時間帯（指定なし）';
+    } else if (selectedStartTimes.length === 5) {
+      selectedTimesSummary.textContent = '時間帯: すべての時間帯';
+    } else {
+      const names = selectedStartTimes.map(t => t === '07' ? '〜07時台' : t === '11' ? '11時台以降' : `${t}時台`);
+      selectedTimesSummary.textContent = `時間帯: ${names.join(', ')}`;
+    }
   }
 
   /**
@@ -134,7 +342,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // 日付プリセットボタン
     document.querySelectorAll('.btn-preset').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const offset = parseInt(e.target.dataset.offset || 0, 10);
         const type = e.target.dataset.type;
         const targetDate = new Date();
 
@@ -147,9 +354,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (type === 'next-sat') {
           const d = ((6 - targetDate.getDay() + 7) % 7 || 7) + 7;
           targetDate.setDate(targetDate.getDate() + d);
+        } else if (type === 'next-sun') {
+          const d = ((7 - targetDate.getDay() + 7) % 7 || 7) + 7;
+          targetDate.setDate(targetDate.getDate() + d);
         }
 
-        inputPlayDate.value = formatDate(targetDate);
+        setSelectedDate(targetDate);
         performSearch();
       });
     });
@@ -230,10 +440,10 @@ document.addEventListener('DOMContentLoaded', () => {
     resultsTable.style.display = 'none';
 
     const params = {
-      playDate: inputPlayDate.value,
+      playDate: inputPlayDate.value || formatDate(selectedDate),
       areaCode: selectArea.value,
       prefCode: selectPref.value,
-      startTime: selectStartTime.value || undefined,
+      startTimes: selectedStartTimes, // 複数選択された時間帯配列
       minRating: parseFloat(selectMinRating.value || 3.5),
       excludeKeyword: inputExclude.value.trim() || 'アコーディア'
     };
@@ -389,7 +599,6 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   function downloadCsv() {
     const formattedText = generateFormattedOutput();
-    // UTF-8 BOM付きでダウンロード
     const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
     const blob = new Blob([bom, formattedText], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
