@@ -85,19 +85,6 @@ function startApp() {
   const btnClearApiKey = document.getElementById('btnClearApiKey');
   const apiStatusText = document.getElementById('apiStatusText');
 
-  // DOM Elements - API Request URL Banner
-  const apiUrlContainer = document.getElementById('apiUrlContainer');
-  const apiParamsDetails = document.getElementById('apiParamsDetails');
-  const paramsChipsGrid = document.getElementById('paramsChipsGrid');
-  const btnCopyApiUrl = document.getElementById('btnCopyApiUrl');
-  const btnToggleApiDetails = document.getElementById('btnToggleApiDetails');
-
-  // DOM Elements - Debug
-  const btnDebug = document.getElementById('btnDebug');
-  const debugModal = document.getElementById('debugModal');
-  const debugContent = document.getElementById('debugContent');
-  const btnCopyDebug = document.getElementById('btnCopyDebug');
-
   // State
   let currentResults = [];
   let currentSort = { column: 'rating', order: 'desc' };
@@ -157,7 +144,6 @@ function startApp() {
     initAdvancedSearch();
     initEventListeners();
     updateApiStatusDisplay();
-    renderApiUrlBanner();
 
     // 初回検索実行
     performSearch();
@@ -184,109 +170,6 @@ function startApp() {
       clubBusOnly: checkClubBusOnly ? checkClubBusOnly.checked : false,
       includeStay: checkIncludeStay ? checkIncludeStay.checked : false
     };
-  }
-
-  /**
-   * 画面上部のAPIリクエストURLパラメータバナーをリアルタイム更新
-   */
-  function renderApiUrlBanner() {
-    if (!apiUrlContainer) return;
-
-    const params = getSearchParams();
-    const urlList = RakutenGoraAPI.buildPlanSearchUrls(params);
-    if (!urlList || urlList.length === 0) return;
-
-    // URLブロックの生成
-    apiUrlContainer.innerHTML = '';
-    urlList.forEach((item, index) => {
-      const block = document.createElement('div');
-      block.className = 'api-url-block';
-
-      // 構文ハイライトの構築
-      const baseUrl = 'https://openapi.rakuten.co.jp/engine/api/Gora/GoraPlanSearch/20170623?';
-      const paramEntries = Object.entries(item.paramsObject);
-      const highlightedParams = paramEntries.map(([k, v], i) => {
-        let valDisplay = v;
-        if (k === 'applicationId' && !item.hasAppId) {
-          valDisplay = 'YOUR_APP_ID (未入力)';
-        } else if (k === 'accessKey' && !item.hasAccessKey) {
-          valDisplay = 'YOUR_ACCESS_KEY (未入力)';
-        }
-        const amp = i < paramEntries.length - 1 ? '<span class="api-param-amp">&</span>' : '';
-        return `<span class="api-param-key">${k}</span><span class="api-param-eq">=</span><span class="api-param-val">${encodeURIComponent(valDisplay)}</span>${amp}`;
-      }).join('');
-
-      let labelTag = '';
-      if (urlList.length > 1) {
-        const allPrefs = PREFECTURES_BY_AREA[params.areaCode] || [];
-        const prefObj = allPrefs.find(p => p.code === item.prefCode);
-        const prefName = prefObj ? prefObj.name : `県コード ${item.prefCode}`;
-        labelTag = `<span style="color: #38bdf8; font-weight: 700; margin-right: 0.5rem; font-size: 0.75rem;">[${index + 1}/${urlList.length} ${prefName}]</span>`;
-      }
-
-      block.innerHTML = `
-        <span class="api-method-tag">GET</span>
-        <div class="api-url-text">
-          ${labelTag}<span class="api-url-base">${baseUrl}</span>${highlightedParams}
-        </div>
-      `;
-      apiUrlContainer.appendChild(block);
-    });
-
-    // パラメータ詳細バッジ（Chips）の更新
-    if (paramsChipsGrid) {
-      paramsChipsGrid.innerHTML = '';
-      const firstItem = urlList[0];
-      const allPrefs = PREFECTURES_BY_AREA[params.areaCode] || [];
-      const areaName = selectArea?.options[selectArea.selectedIndex]?.text || '関東';
-
-      const chipData = [
-        { k: 'applicationId', v: firstItem.hasAppId ? '設定済み' : '未設定 (デモデータ)', hint: 'Client ID' },
-        { k: 'accessKey', v: firstItem.hasAccessKey ? '設定済み' : '未設定', hint: 'Access Key' },
-        { k: 'format', v: 'json', hint: '返却形式' },
-        { k: 'playDate', v: params.playDate, hint: 'プレー日' },
-        { 
-          k: 'prefCode', 
-          v: selectedPrefCodes.length > 0 
-            ? selectedPrefCodes.map(c => allPrefs.find(p => p.code === c)?.name || c).join(', ') 
-            : `指定なし (${areaName}全域)`,
-          hint: '都道府県'
-        },
-        { 
-          k: 'startTime〜endTime', 
-          v: params.startTimes && params.startTimes.length > 0 
-            ? `${params.startTimes[0]}時台 〜 ${params.startTimes[params.startTimes.length - 1]}時台` 
-            : '指定なし',
-          hint: '時間帯範囲'
-        },
-        { k: 'NGPlan', v: params.includeStay ? 'ハーフ/レッスン/コンペ' : 'ハーフ/レッスン/コンペ/宿泊', hint: '除外プラン' },
-        { k: 'sort', v: firstItem.paramsObject.sort || 'evaluation', hint: 'APIソート順' },
-        { k: 'hits', v: '30', hint: '最大取得件数' }
-      ];
-
-      if (params.keyword) {
-        chipData.push({ k: 'keyword', v: params.keyword, hint: '検索ワード' });
-      }
-      if (params.plan2Sum) {
-        chipData.push({ k: 'plan2Sum', v: '1', hint: '2サム保証' });
-      }
-      if (params.playStyle === 'caddy') {
-        chipData.push({ k: 'planCaddy', v: '1', hint: 'キャディ付' });
-      }
-
-      chipData.forEach(cd => {
-        const chip = document.createElement('div');
-        chip.className = 'param-chip';
-        chip.innerHTML = `
-          <span class="k">${cd.k}:</span>
-          <span class="v">${cd.v}</span>
-          <span class="hint">(${cd.hint})</span>
-        `;
-        paramsChipsGrid.appendChild(chip);
-      });
-    }
-
-    updateAdvancedBadgeSummary();
   }
 
   /**
@@ -330,7 +213,6 @@ function startApp() {
         if (checkIncludeStay) checkIncludeStay.checked = false;
 
         updateAdvancedBadgeSummary();
-        renderApiUrlBanner();
         performSearch();
         showToast('詳細検索条件をリセットしました');
       });
@@ -387,7 +269,6 @@ function startApp() {
 
     calCurrentYear = selectedDate.getFullYear();
     calCurrentMonth = selectedDate.getMonth();
-    renderApiUrlBanner();
   }
 
   function formatDate(d) {
@@ -697,8 +578,6 @@ function startApp() {
         selectedPrefTags.appendChild(tag);
       });
     }
-
-    renderApiUrlBanner();
   }
 
   /**
@@ -825,8 +704,6 @@ function startApp() {
         selectedTimeTags.appendChild(tag);
       });
     }
-
-    renderApiUrlBanner();
   }
 
   /**
@@ -844,7 +721,6 @@ function startApp() {
 
     // 詳細条件の変更監視
     const debouncedSearch = debounce(() => {
-      renderApiUrlBanner();
       performSearch();
     }, 350);
 
@@ -857,7 +733,6 @@ function startApp() {
     [selectSort, selectPlayStyle, selectHighway, selectMaxCarTime, selectMaxTrainTime].forEach(select => {
       if (select) {
         select.addEventListener('change', () => {
-          renderApiUrlBanner();
           performSearch();
         });
       }
@@ -866,7 +741,6 @@ function startApp() {
     [check2Sum, checkClubBusOnly, checkIncludeStay].forEach(chk => {
       if (chk) {
         chk.addEventListener('change', () => {
-          renderApiUrlBanner();
           performSearch();
         });
       }
@@ -936,7 +810,6 @@ function startApp() {
       const appUrl = inputAppUrl ? inputAppUrl.value.trim() : '';
       RakutenGoraAPI.setStoredApiKeys(appId, accessKey, appUrl);
       updateApiStatusDisplay();
-      renderApiUrlBanner();
       settingsModal.classList.remove('active');
       showToast('楽天OpenAPI設定を保存しました');
       performSearch();
@@ -949,7 +822,6 @@ function startApp() {
       if (inputAppUrl) inputAppUrl.value = '';
       RakutenGoraAPI.setStoredApiKeys('', '', '');
       updateApiStatusDisplay();
-      renderApiUrlBanner();
       showToast('API設定をクリアしデモモードに戻しました');
     });
 
@@ -960,44 +832,6 @@ function startApp() {
         showToast('指定形式テキストをクリップボードにコピーしました！');
       });
     });
-
-    // URLパラメータバナー: URLコピー
-    if (btnCopyApiUrl) {
-      btnCopyApiUrl.addEventListener('click', () => {
-        const params = getSearchParams();
-        const urlList = RakutenGoraAPI.buildPlanSearchUrls(params);
-        const copyText = urlList.map(u => u.directUrl).join('\n');
-        navigator.clipboard.writeText(copyText).then(() => {
-          showToast('楽天GORA API URLパラメータをコピーしました！');
-        });
-      });
-    }
-
-    // URLパラメータバナー: パラメータ詳細トグル
-    if (btnToggleApiDetails && apiParamsDetails) {
-      btnToggleApiDetails.addEventListener('click', () => {
-        const isHidden = apiParamsDetails.style.display === 'none';
-        apiParamsDetails.style.display = isHidden ? 'block' : 'none';
-        btnToggleApiDetails.textContent = isHidden ? '▲ パラメータ詳細を閉じる' : '▼ パラメータ詳細';
-      });
-    }
-
-    // デバッグモーダルオープン
-    if (btnDebug) {
-      btnDebug.addEventListener('click', () => {
-        updateDebugDisplay();
-        debugModal.classList.add('active');
-      });
-    }
-
-    // デバッグ情報コピー
-    if (btnCopyDebug) {
-      btnCopyDebug.addEventListener('click', () => {
-        navigator.clipboard.writeText(debugContent.textContent).then(() => {
-          showToast('デバッグ情報をコピーしました！');
-        });
-      });
-    }
 
     // モーダルクローズ
     document.querySelectorAll('.modal-overlay .btn-close, .modal-overlay').forEach(el => {
@@ -1037,64 +871,6 @@ function startApp() {
       apiStatusText.textContent = '🟡 デモ・サンプルモード';
       apiStatusText.style.color = 'var(--text-secondary)';
     }
-  }
-
-  /**
-   * デバッグ情報の表示更新
-   */
-  function updateDebugDisplay() {
-    if (!lastSearchParams) {
-      debugContent.textContent = 'まだ検索が実行されていません。';
-      return;
-    }
-    const areaName = selectArea.options[selectArea.selectedIndex]?.text || '';
-    const allPrefs = PREFECTURES_BY_AREA[lastSearchParams.areaCode] || [];
-    const selectedPrefNames = (lastSearchParams.prefCodes || []).map(code => {
-      const p = allPrefs.find(item => item.code === code);
-      return p ? `${p.name} (コード: ${code})` : code;
-    });
-
-    const appId = RakutenGoraAPI.getStoredAppId();
-    const accessKey = RakutenGoraAPI.getStoredAccessKey();
-
-    const info = {
-      実行時刻: lastSearchTime,
-      動作モード: lastSearchMode,
-      認証設定: {
-        applicationId: appId ? (appId.slice(0, 4) + '...' + appId.slice(-4)) : '未設定 (デモデータ)',
-        accessKey: accessKey ? (accessKey.slice(0, 5) + '...' + accessKey.slice(-4)) : '未設定'
-      },
-      通信エンドポイント: lastSearchMode.includes('OpenAPI') ? 'https://openapi.rakuten.co.jp/engine/api/Gora/GoraPlanSearch/20170623' : 'ローカルモック検索 (simulateSearch)',
-      送信クエリパラメータ: {
-        playDate: lastSearchParams.playDate,
-        areaCode: `${lastSearchParams.areaCode} (${areaName})`,
-        prefCodes: lastSearchParams.prefCodes && lastSearchParams.prefCodes.length > 0 
-          ? selectedPrefNames 
-          : `全県選択（${areaName}全域）`,
-        startTimes: lastSearchParams.startTimes.map(t => `${t}時台`),
-        NGPlan: lastSearchParams.includeStay ? 'planHalfRound,planLesson,planOpenCompe' : 'planHalfRound,planLesson,planOpenCompe,planStay',
-        sort: lastSearchParams.sort,
-        keyword: lastSearchParams.keyword || '(指定なし)',
-        playStyle: lastSearchParams.playStyle,
-        highway: lastSearchParams.highway,
-        maxCarTime: lastSearchParams.maxCarTime ? `${lastSearchParams.maxCarTime}分以内` : '(指定なし)',
-        maxTrainTime: lastSearchParams.maxTrainTime ? `${lastSearchParams.maxTrainTime}分以内` : '(指定なし)',
-        plan2Sum: lastSearchParams.plan2Sum ? '有効 (1)' : '指定なし',
-        clubBusOnly: lastSearchParams.clubBusOnly ? '有効 (あり限定)' : '指定なし',
-        includeStay: lastSearchParams.includeStay ? '有効 (宿泊含む)' : '除外 (NGPlan)'
-      },
-      検索結果件数: currentResults ? currentResults.length : 0,
-      取得コース一覧: (currentResults || []).map(r => ({
-        id: r.id,
-        name: r.name,
-        address: r.address,
-        evaluation: r.ratingDisplay,
-        trainTransit: `${r.trainTransit.minutes}分 (${r.trainTransit.text})`,
-        carTransit: `${r.carTransit.minutes}分 (${r.carTransit.text})`,
-        clubBus: r.clubBus.text
-      }))
-    };
-    debugContent.textContent = JSON.stringify(info, null, 2);
   }
 
   /**
