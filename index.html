@@ -171,36 +171,37 @@
               <div class="selected-pref-tags" id="selectedPrefTags"></div>
             </div>
 
-            <!-- スタート時間帯（複数選択可能） -->
-            <div class="form-group form-group-time" style="grid-column: span 2;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+            <!-- スタート時間帯 (複数選択ピックリスト) -->
+            <div class="form-group form-group-time">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
                 <label class="form-label" style="margin-bottom: 0;">
                   ⏰ スタート時間帯 <span style="font-size: 0.7rem; color: var(--accent); font-weight: normal;">(複数選択可)</span>
                 </label>
-                <div class="time-quick-actions">
-                  <button type="button" class="btn-time-action" id="btnSelectAllTimes">すべて選択</button>
-                  <button type="button" class="btn-time-action" id="btnClearAllTimes">解除</button>
+              </div>
+
+              <div class="picklist-wrapper" id="timePicklistWrapper">
+                <div class="picklist-trigger" id="timePicklistTrigger">
+                  <span class="picklist-placeholder" id="timePicklistPlaceholder">08時台, 09時台</span>
+                  <span class="picklist-arrow">▼</span>
+                </div>
+
+                <!-- 時間帯ピックリストドロップダウン -->
+                <div class="picklist-dropdown" id="timePicklistDropdown">
+                  <div class="picklist-header">
+                    <span style="font-weight: 700; font-size: 0.8rem; color: #fff;">スタート時間帯を選択</span>
+                    <div class="picklist-actions">
+                      <button type="button" class="btn-picklist-action" id="btnSelectAllTimes">全選択</button>
+                      <button type="button" class="btn-picklist-action" id="btnClearAllTimes">解除</button>
+                    </div>
+                  </div>
+                  <div class="picklist-options-list" id="timePicklistOptions">
+                    <!-- JSでチェックボックスを動的生成 -->
+                  </div>
                 </div>
               </div>
 
-              <!-- 時間帯チップ群（複数選択トグル） -->
-              <div class="time-chips-container" id="timeChipsContainer">
-                <button type="button" class="time-chip" data-time="07">
-                  <span class="chip-check">✓</span> 〜07時台 (早朝)
-                </button>
-                <button type="button" class="time-chip active" data-time="08">
-                  <span class="chip-check">✓</span> 08時台
-                </button>
-                <button type="button" class="time-chip active" data-time="09">
-                  <span class="chip-check">✓</span> 09時台
-                </button>
-                <button type="button" class="time-chip" data-time="10">
-                  <span class="chip-check">✓</span> 10時台
-                </button>
-                <button type="button" class="time-chip" data-time="11">
-                  <span class="chip-check">✓</span> 11時台以降
-                </button>
-              </div>
+              <!-- 選択中の時間帯タグ表示 -->
+              <div class="selected-time-tags" id="selectedTimeTags"></div>
             </div>
 
             <!-- 検索ボタン -->
@@ -211,11 +212,135 @@
             </div>
           </div>
 
+          <!-- 🔽 詳細検索条件・こだわり設定アコーディオン -->
+          <div class="advanced-search-container" id="advancedSearchContainer">
+            <div class="advanced-search-header" id="advancedSearchToggle" role="button" tabindex="0" title="クリックして詳細検索条件を開閉">
+              <div class="adv-header-left">
+                <span class="adv-toggle-icon" id="advToggleIcon">▶</span>
+                <span class="adv-header-title">🛠️ 詳細検索条件・こだわり設定</span>
+                <span class="adv-active-badge" id="advActiveBadge" style="display: none;">0件設定中</span>
+              </div>
+              <div class="adv-header-right">
+                <span class="adv-toggle-hint" id="advToggleHint">開く ▼</span>
+              </div>
+            </div>
+
+            <!-- 詳細検索の展開パネル -->
+            <div class="advanced-search-body" id="advancedSearchBody" style="display: none;">
+              <div class="advanced-form-grid">
+                <!-- キーワード検索 -->
+                <div class="adv-form-group">
+                  <label for="inputKeyword" class="form-label">
+                    🔍 ゴルフ場名・キーワード
+                  </label>
+                  <input type="text" id="inputKeyword" class="form-control" placeholder="例: 成田, チャンピオン, フラット">
+                </div>
+
+                <!-- 並び替え（ソート） -->
+                <div class="adv-form-group">
+                  <label for="selectSort" class="form-label">
+                    📊 並び順（ソート）
+                  </label>
+                  <select id="selectSort" class="form-control">
+                    <option value="evaluation" selected>★ GORA総合評価が高い順</option>
+                    <option value="price">💴 料金が安い順</option>
+                    <option value="carTransit">🚗 神田からの車所要時間が短い順</option>
+                    <option value="trainTransit">🚃 笹塚からの電車所要時間が短い順</option>
+                    <option value="standard">🎯 楽天GORAおすすめ標準順</option>
+                  </select>
+                </div>
+
+                <!-- プレースタイル・人数条件 -->
+                <div class="adv-form-group">
+                  <label for="selectPlayStyle" class="form-label">
+                    🏌️ プレースタイル
+                  </label>
+                  <select id="selectPlayStyle" class="form-control">
+                    <option value="all" selected>指定なし（セルフ・キャディ付両方）</option>
+                    <option value="self">セルフプレーのみ</option>
+                    <option value="caddy">キャディ付きのみ</option>
+                  </select>
+                </div>
+
+                <!-- 高速道路フィルター -->
+                <div class="adv-form-group">
+                  <label for="selectHighway" class="form-label">
+                    🛣️ 高速道路
+                  </label>
+                  <select id="selectHighway" class="form-control">
+                    <option value="all" selected>すべての高速道路</option>
+                    <option value="aqualine">アクアライン・館山道・圏央道</option>
+                    <option value="higashikanto">東関東道・京葉道路</option>
+                    <option value="tomei">東名・新東名・小田厚</option>
+                    <option value="kanetsu">関越道・上信越道</option>
+                    <option value="chuo">中央自動車道</option>
+                    <option value="joban">常磐自動車道</option>
+                    <option value="tohoku">東北自動車道・北関東道</option>
+                  </select>
+                </div>
+
+                <!-- 車の所要時間上限 -->
+                <div class="adv-form-group">
+                  <label for="selectMaxCarTime" class="form-label">
+                    🚗 神田からの車所要時間上限
+                  </label>
+                  <select id="selectMaxCarTime" class="form-control">
+                    <option value="0" selected>指定なし（上限なし）</option>
+                    <option value="60">60分以内</option>
+                    <option value="75">75分以内</option>
+                    <option value="90">90分以内</option>
+                    <option value="120">120分以内</option>
+                  </select>
+                </div>
+
+                <!-- 電車の所要時間上限 -->
+                <div class="adv-form-group">
+                  <label for="selectMaxTrainTime" class="form-label">
+                    🚃 笹塚からの電車所要時間上限
+                  </label>
+                  <select id="selectMaxTrainTime" class="form-control">
+                    <option value="0" selected>指定なし（上限なし）</option>
+                    <option value="60">60分以内</option>
+                    <option value="75">75分以内</option>
+                    <option value="90">90分以内</option>
+                    <option value="120">120分以内</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- 特殊条件チェックボックス群 -->
+              <div class="advanced-checkboxes-row">
+                <label class="custom-check-card">
+                  <input type="checkbox" id="check2Sum">
+                  <span class="check-box-custom"></span>
+                  <span class="check-label-text">👥 2サム保証・割増なし</span>
+                </label>
+
+                <label class="custom-check-card">
+                  <input type="checkbox" id="checkClubBusOnly">
+                  <span class="check-box-custom"></span>
+                  <span class="check-label-text">🚌 クラブバス運行あり限定</span>
+                </label>
+
+                <label class="custom-check-card">
+                  <input type="checkbox" id="checkIncludeStay">
+                  <span class="check-box-custom"></span>
+                  <span class="check-label-text">🏨 宿泊プランを含む <span style="font-size: 0.7rem; color: var(--text-muted);">(通常は除外)</span></span>
+                </label>
+
+                <button type="button" class="btn-adv-reset" id="btnResetAdvanced">
+                  🔄 詳細条件をリセット
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- 自動適用フィルター条件（出力条件）の表示とオプション -->
           <div class="filter-conditions-pill">
             <span style="font-weight: 700; color: #fff;">⚙️ 自動適用中の出力条件:</span>
             <span class="pill-tag">★ GORA評価 3.5以上</span>
             <span class="pill-tag danger">✕ 「アコーディア」除外</span>
+            <span class="pill-tag">✕ ハーフ/レッスン/コンペ除外</span>
             <span id="selectedTimesSummary" style="color: var(--primary-light); font-weight: 600; font-size: 0.8rem;">
               時間帯: 08時台, 09時台
             </span>

@@ -2,7 +2,7 @@
  * GolfCourseFinder - Main Application Controller
  */
 
-document.addEventListener('DOMContentLoaded', () => {
+function startApp() {
   // DOM Elements - Calendar
   const searchForm = document.getElementById('searchForm');
   const inputPlayDate = document.getElementById('inputPlayDate');
@@ -29,13 +29,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnSelectAllPrefs = document.getElementById('btnSelectAllPrefs');
   const btnClearAllPrefs = document.getElementById('btnClearAllPrefs');
 
-  // DOM Elements - Time Chips & Conditions
-  const timeChipsContainer = document.getElementById('timeChipsContainer');
+  // DOM Elements - Time Picklist
+  const timePicklistWrapper = document.getElementById('timePicklistWrapper');
+  const timePicklistTrigger = document.getElementById('timePicklistTrigger');
+  const timePicklistPlaceholder = document.getElementById('timePicklistPlaceholder');
+  const timePicklistDropdown = document.getElementById('timePicklistDropdown');
+  const timePicklistOptions = document.getElementById('timePicklistOptions');
+  const selectedTimeTags = document.getElementById('selectedTimeTags');
   const btnSelectAllTimes = document.getElementById('btnSelectAllTimes');
   const btnClearAllTimes = document.getElementById('btnClearAllTimes');
   const selectedTimesSummary = document.getElementById('selectedTimesSummary');
   const selectMinRating = document.getElementById('selectMinRating');
   const inputExclude = document.getElementById('inputExclude');
+
+  // DOM Elements - Advanced Search Accordion & Filters
+  const advancedSearchContainer = document.getElementById('advancedSearchContainer');
+  const advancedSearchToggle = document.getElementById('advancedSearchToggle');
+  const advToggleIcon = document.getElementById('advToggleIcon');
+  const advActiveBadge = document.getElementById('advActiveBadge');
+  const advToggleHint = document.getElementById('advToggleHint');
+  const advancedSearchBody = document.getElementById('advancedSearchBody');
+
+  const inputKeyword = document.getElementById('inputKeyword');
+  const selectSort = document.getElementById('selectSort');
+  const selectPlayStyle = document.getElementById('selectPlayStyle');
+  const selectHighway = document.getElementById('selectHighway');
+  const selectMaxCarTime = document.getElementById('selectMaxCarTime');
+  const selectMaxTrainTime = document.getElementById('selectMaxTrainTime');
+  const check2Sum = document.getElementById('check2Sum');
+  const checkClubBusOnly = document.getElementById('checkClubBusOnly');
+  const checkIncludeStay = document.getElementById('checkIncludeStay');
+  const btnResetAdvanced = document.getElementById('btnResetAdvanced');
 
   // DOM Elements - Results & Modals
   const resultsSection = document.getElementById('resultsSection');
@@ -86,6 +110,16 @@ document.addEventListener('DOMContentLoaded', () => {
   let lastSearchTime = null;
   let lastSearchMode = '';
 
+  // 時間帯マスターデータ
+  const TIME_SLOTS = [
+    { code: '06', name: '〜06時台 (早朝)' },
+    { code: '07', name: '07時台' },
+    { code: '08', name: '08時台' },
+    { code: '09', name: '09時台' },
+    { code: '10', name: '10時台' },
+    { code: '11', name: '11時台以降' }
+  ];
+
   // 都道府県マスターデータ（エリア別）
   const PREFECTURES_BY_AREA = {
     '8': [ // 関東
@@ -119,7 +153,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initDatePicker();
     initCalendarWidget();
     initPrefecturePicklist();
-    initTimeChips();
+    initTimePicklist();
+    initAdvancedSearch();
     initEventListeners();
     updateApiStatusDisplay();
     renderApiUrlBanner();
@@ -129,22 +164,35 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
+   * 現在の入力条件オブジェクトを取得
+   */
+  function getSearchParams() {
+    return {
+      playDate: inputPlayDate.value || formatDate(selectedDate),
+      areaCode: selectArea ? (selectArea.value || '8') : '8',
+      prefCodes: selectedPrefCodes,
+      startTimes: selectedStartTimes,
+      minRating: selectMinRating ? parseFloat(selectMinRating.value || 3.5) : 3.5,
+      excludeKeyword: inputExclude ? (inputExclude.value.trim() || 'アコーディア') : 'アコーディア',
+      keyword: inputKeyword ? inputKeyword.value.trim() : '',
+      sort: selectSort ? selectSort.value : 'evaluation',
+      playStyle: selectPlayStyle ? selectPlayStyle.value : 'all',
+      highway: selectHighway ? selectHighway.value : 'all',
+      maxCarTime: selectMaxCarTime ? parseInt(selectMaxCarTime.value || '0', 10) : 0,
+      maxTrainTime: selectMaxTrainTime ? parseInt(selectMaxTrainTime.value || '0', 10) : 0,
+      plan2Sum: check2Sum ? check2Sum.checked : false,
+      clubBusOnly: checkClubBusOnly ? checkClubBusOnly.checked : false,
+      includeStay: checkIncludeStay ? checkIncludeStay.checked : false
+    };
+  }
+
+  /**
    * 画面上部のAPIリクエストURLパラメータバナーをリアルタイム更新
    */
   function renderApiUrlBanner() {
     if (!apiUrlContainer) return;
 
-    const playDate = inputPlayDate.value || formatDate(selectedDate);
-    const area = selectArea ? (selectArea.value || '8') : '8';
-    const params = {
-      playDate: playDate,
-      areaCode: area,
-      prefCodes: selectedPrefCodes,
-      startTimes: selectedStartTimes,
-      minRating: selectMinRating ? parseFloat(selectMinRating.value || 3.5) : 3.5,
-      excludeKeyword: inputExclude ? (inputExclude.value.trim() || 'アコーディア') : 'アコーディア'
-    };
-
+    const params = getSearchParams();
     const urlList = RakutenGoraAPI.buildPlanSearchUrls(params);
     if (!urlList || urlList.length === 0) return;
 
@@ -170,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       let labelTag = '';
       if (urlList.length > 1) {
-        const allPrefs = PREFECTURES_BY_AREA[area] || [];
+        const allPrefs = PREFECTURES_BY_AREA[params.areaCode] || [];
         const prefObj = allPrefs.find(p => p.code === item.prefCode);
         const prefName = prefObj ? prefObj.name : `県コード ${item.prefCode}`;
         labelTag = `<span style="color: #38bdf8; font-weight: 700; margin-right: 0.5rem; font-size: 0.75rem;">[${index + 1}/${urlList.length} ${prefName}]</span>`;
@@ -189,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (paramsChipsGrid) {
       paramsChipsGrid.innerHTML = '';
       const firstItem = urlList[0];
-      const allPrefs = PREFECTURES_BY_AREA[area] || [];
+      const allPrefs = PREFECTURES_BY_AREA[params.areaCode] || [];
       const areaName = selectArea?.options[selectArea.selectedIndex]?.text || '関東';
 
       const chipData = [
@@ -211,9 +259,20 @@ document.addEventListener('DOMContentLoaded', () => {
             : '指定なし',
           hint: '時間帯範囲'
         },
-        { k: 'sort', v: 'evaluation', hint: '評価(レート)順' },
+        { k: 'NGPlan', v: params.includeStay ? 'ハーフ/レッスン/コンペ' : 'ハーフ/レッスン/コンペ/宿泊', hint: '除外プラン' },
+        { k: 'sort', v: firstItem.paramsObject.sort || 'evaluation', hint: 'APIソート順' },
         { k: 'hits', v: '30', hint: '最大取得件数' }
       ];
+
+      if (params.keyword) {
+        chipData.push({ k: 'keyword', v: params.keyword, hint: '検索ワード' });
+      }
+      if (params.plan2Sum) {
+        chipData.push({ k: 'plan2Sum', v: '1', hint: '2サム保証' });
+      }
+      if (params.playStyle === 'caddy') {
+        chipData.push({ k: 'planCaddy', v: '1', hint: 'キャディ付' });
+      }
 
       chipData.forEach(cd => {
         const chip = document.createElement('div');
@@ -225,6 +284,81 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         paramsChipsGrid.appendChild(chip);
       });
+    }
+
+    updateAdvancedBadgeSummary();
+  }
+
+  /**
+   * 詳細検索アコーディオンの初期化
+   */
+  function initAdvancedSearch() {
+    if (!advancedSearchToggle || !advancedSearchBody) return;
+
+    advancedSearchToggle.addEventListener('click', () => {
+      const isClosed = advancedSearchBody.style.display === 'none';
+      if (isClosed) {
+        advancedSearchBody.style.display = 'block';
+        advToggleIcon.classList.add('open');
+        advToggleHint.textContent = '閉じる ▲';
+      } else {
+        advancedSearchBody.style.display = 'none';
+        advToggleIcon.classList.remove('open');
+        advToggleHint.textContent = '開く ▼';
+      }
+    });
+
+    // キーボード操作対応
+    advancedSearchToggle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        advancedSearchToggle.click();
+      }
+    });
+
+    // 詳細条件リセット
+    if (btnResetAdvanced) {
+      btnResetAdvanced.addEventListener('click', () => {
+        if (inputKeyword) inputKeyword.value = '';
+        if (selectSort) selectSort.value = 'evaluation';
+        if (selectPlayStyle) selectPlayStyle.value = 'all';
+        if (selectHighway) selectHighway.value = 'all';
+        if (selectMaxCarTime) selectMaxCarTime.value = '0';
+        if (selectMaxTrainTime) selectMaxTrainTime.value = '0';
+        if (check2Sum) check2Sum.checked = false;
+        if (checkClubBusOnly) checkClubBusOnly.checked = false;
+        if (checkIncludeStay) checkIncludeStay.checked = false;
+
+        updateAdvancedBadgeSummary();
+        renderApiUrlBanner();
+        performSearch();
+        showToast('詳細検索条件をリセットしました');
+      });
+    }
+  }
+
+  /**
+   * 詳細設定のアクティブ条件バッジの更新
+   */
+  function updateAdvancedBadgeSummary() {
+    if (!advActiveBadge) return;
+
+    let activeCount = 0;
+    if (inputKeyword && inputKeyword.value.trim()) activeCount++;
+    if (selectSort && selectSort.value !== 'evaluation') activeCount++;
+    if (selectPlayStyle && selectPlayStyle.value !== 'all') activeCount++;
+    if (selectHighway && selectHighway.value !== 'all') activeCount++;
+    if (selectMaxCarTime && selectMaxCarTime.value !== '0') activeCount++;
+    if (selectMaxTrainTime && selectMaxTrainTime.value !== '0') activeCount++;
+    if (check2Sum && check2Sum.checked) activeCount++;
+    if (checkClubBusOnly && checkClubBusOnly.checked) activeCount++;
+    if (checkIncludeStay && checkIncludeStay.checked) activeCount++;
+
+    if (activeCount > 0) {
+      advActiveBadge.textContent = `${activeCount}件設定中`;
+      advActiveBadge.style.display = 'inline-flex';
+    } else {
+      advActiveBadge.style.display = 'none';
     }
   }
 
@@ -248,18 +382,11 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedDate = new Date(date);
     const dateStr = formatDate(selectedDate);
     inputPlayDate.value = dateStr;
-
-    // 表示テキスト
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth() + 1;
-    const day = selectedDate.getDate();
-    const weekday = WEEKDAYS_JA[selectedDate.getDay()];
-    selectedDateText.textContent = `${year}年${month}月${day}日 (${weekday})`;
+    const formattedJa = `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日 (${WEEKDAYS_JA[selectedDate.getDay()]})`;
+    selectedDateText.textContent = formattedJa;
 
     calCurrentYear = selectedDate.getFullYear();
     calCurrentMonth = selectedDate.getMonth();
-    updateCalendarSelects();
-    renderCalendarDays();
     renderApiUrlBanner();
   }
 
@@ -274,10 +401,10 @@ document.addEventListener('DOMContentLoaded', () => {
    * カレンダーウィジェットの初期化
    */
   function initCalendarWidget() {
-    // 年・月セレクトボックスの初期化
+    // 年・月セレクトボックスの初期化（今年から2年先まで）
     const currentYear = new Date().getFullYear();
     calYearSelect.innerHTML = '';
-    for (let y = currentYear - 1; y <= currentYear + 3; y++) {
+    for (let y = currentYear; y <= currentYear + 2; y++) {
       const opt = document.createElement('option');
       opt.value = y;
       opt.textContent = `${y}年`;
@@ -293,6 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateCalendarSelects();
+    renderCalendarDays();
 
     // 年月変更イベント
     calYearSelect.addEventListener('change', () => {
@@ -374,6 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function openCalendar() {
     closePrefPicklist();
+    closeTimePicklist();
     calendarWidget.classList.add('open');
     selectedDateDisplay.classList.add('active');
     updateCalendarSelects();
@@ -401,14 +530,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 月初前の空白セル
     for (let i = 0; i < firstDay; i++) {
       const emptyCell = document.createElement('div');
       emptyCell.className = 'cal-day-cell empty';
       calendarDaysGrid.appendChild(emptyCell);
     }
 
-    // 各日付セル
     for (let d = 1; d <= daysInMonth; d++) {
       const dayDate = new Date(calCurrentYear, calCurrentMonth, d);
       dayDate.setHours(0, 0, 0, 0);
@@ -434,7 +561,6 @@ document.addEventListener('DOMContentLoaded', () => {
         cell.classList.add('selected');
       }
 
-      // 日付クリックで選択
       cell.addEventListener('click', (e) => {
         e.stopPropagation();
         setSelectedDate(dayDate);
@@ -452,7 +578,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function initPrefecturePicklist() {
     renderPrefPicklistOptions();
 
-    // ピックリスト開閉
     prefPicklistTrigger.addEventListener('click', (e) => {
       e.stopPropagation();
       const isOpen = prefPicklistDropdown.classList.contains('open');
@@ -463,7 +588,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // エリア変更時
     selectArea.addEventListener('change', () => {
       selectedPrefCodes = [];
       renderPrefPicklistOptions();
@@ -471,7 +595,6 @@ document.addEventListener('DOMContentLoaded', () => {
       performSearch();
     });
 
-    // 全選択ボタン
     btnSelectAllPrefs.addEventListener('click', () => {
       const area = selectArea.value || '8';
       const prefs = PREFECTURES_BY_AREA[area] || [];
@@ -481,7 +604,6 @@ document.addEventListener('DOMContentLoaded', () => {
       performSearch();
     });
 
-    // 全解除ボタン
     btnClearAllPrefs.addEventListener('click', () => {
       selectedPrefCodes = [];
       renderPrefPicklistOptions();
@@ -489,7 +611,6 @@ document.addEventListener('DOMContentLoaded', () => {
       performSearch();
     });
 
-    // 外部クリックでピックリスト閉じる
     document.addEventListener('click', (e) => {
       if (!prefPicklistWrapper.contains(e.target)) {
         closePrefPicklist();
@@ -499,6 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function openPrefPicklist() {
     closeCalendar();
+    closeTimePicklist();
     prefPicklistDropdown.classList.add('open');
     prefPicklistTrigger.classList.add('active');
   }
@@ -508,9 +630,6 @@ document.addEventListener('DOMContentLoaded', () => {
     prefPicklistTrigger.classList.remove('active');
   }
 
-  /**
-   * 都道府県チェックリストの描画
-   */
   function renderPrefPicklistOptions() {
     const area = selectArea.value || '8';
     const prefs = PREFECTURES_BY_AREA[area] || [];
@@ -546,9 +665,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePrefPicklistUI();
   }
 
-  /**
-   * ピックリストのプレースホルダーと選択タグ表示の更新
-   */
   function updatePrefPicklistUI() {
     const area = selectArea.value || '8';
     const allPrefs = PREFECTURES_BY_AREA[area] || [];
@@ -567,7 +683,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       prefPicklistPlaceholder.textContent = `${selectedNames.join(', ')} (${selectedNames.length}県)`;
 
-      // タグ表示
       allPrefs.filter(p => selectedPrefCodes.includes(p.code)).forEach(p => {
         const tag = document.createElement('span');
         tag.className = 'pref-tag';
@@ -587,58 +702,128 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * スタート時間帯複数選択チップの初期化
+   * スタート時間帯ピックリスト（プルダウン複数選択）の初期化
    */
-  function initTimeChips() {
-    updateTimeChipsUI();
+  function initTimePicklist() {
+    renderTimePicklistOptions();
 
-    timeChipsContainer.querySelectorAll('.time-chip').forEach(chip => {
-      chip.addEventListener('click', (e) => {
-        const timeVal = chip.dataset.time;
-        if (selectedStartTimes.includes(timeVal)) {
-          selectedStartTimes = selectedStartTimes.filter(t => t !== timeVal);
+    if (timePicklistTrigger) {
+      timePicklistTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = timePicklistDropdown.classList.contains('open');
+        if (isOpen) {
+          closeTimePicklist();
         } else {
-          selectedStartTimes.push(timeVal);
-          selectedStartTimes.sort();
+          openTimePicklist();
         }
-        updateTimeChipsUI();
+      });
+    }
+
+    if (btnSelectAllTimes) {
+      btnSelectAllTimes.addEventListener('click', () => {
+        selectedStartTimes = TIME_SLOTS.map(t => t.code);
+        renderTimePicklistOptions();
+        updateTimePicklistUI();
         performSearch();
       });
-    });
+    }
 
-    btnSelectAllTimes.addEventListener('click', () => {
-      selectedStartTimes = ['07', '08', '09', '10', '11'];
-      updateTimeChipsUI();
-      performSearch();
-    });
+    if (btnClearAllTimes) {
+      btnClearAllTimes.addEventListener('click', () => {
+        selectedStartTimes = [];
+        renderTimePicklistOptions();
+        updateTimePicklistUI();
+        performSearch();
+      });
+    }
 
-    btnClearAllTimes.addEventListener('click', () => {
-      selectedStartTimes = [];
-      updateTimeChipsUI();
-      performSearch();
+    document.addEventListener('click', (e) => {
+      if (timePicklistWrapper && !timePicklistWrapper.contains(e.target)) {
+        closeTimePicklist();
+      }
     });
   }
 
-  /**
-   * 時間帯チップのUIおよびサマリーの更新
-   */
-  function updateTimeChipsUI() {
-    timeChipsContainer.querySelectorAll('.time-chip').forEach(chip => {
-      const timeVal = chip.dataset.time;
-      if (selectedStartTimes.includes(timeVal)) {
-        chip.classList.add('active');
-      } else {
-        chip.classList.remove('active');
-      }
+  function openTimePicklist() {
+    closeCalendar();
+    closePrefPicklist();
+    if (timePicklistDropdown) timePicklistDropdown.classList.add('open');
+    if (timePicklistTrigger) timePicklistTrigger.classList.add('active');
+  }
+
+  function closeTimePicklist() {
+    if (timePicklistDropdown) timePicklistDropdown.classList.remove('open');
+    if (timePicklistTrigger) timePicklistTrigger.classList.remove('active');
+  }
+
+  function renderTimePicklistOptions() {
+    if (!timePicklistOptions) return;
+    timePicklistOptions.innerHTML = '';
+
+    TIME_SLOTS.forEach(t => {
+      const isChecked = selectedStartTimes.includes(t.code);
+      const label = document.createElement('label');
+      label.className = `picklist-item ${isChecked ? 'checked' : ''}`;
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = t.code;
+      checkbox.checked = isChecked;
+
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          if (!selectedStartTimes.includes(t.code)) {
+            selectedStartTimes.push(t.code);
+            selectedStartTimes.sort();
+          }
+        } else {
+          selectedStartTimes = selectedStartTimes.filter(c => c !== t.code);
+        }
+        renderTimePicklistOptions();
+        updateTimePicklistUI();
+        performSearch();
+      });
+
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(t.name));
+      timePicklistOptions.appendChild(label);
     });
 
+    updateTimePicklistUI();
+  }
+
+  function updateTimePicklistUI() {
+    if (!timePicklistPlaceholder) return;
+    if (selectedTimeTags) selectedTimeTags.innerHTML = '';
+
     if (selectedStartTimes.length === 0) {
-      selectedTimesSummary.textContent = '時間帯: 全時間帯（指定なし）';
-    } else if (selectedStartTimes.length === 5) {
-      selectedTimesSummary.textContent = '時間帯: すべての時間帯';
+      timePicklistPlaceholder.textContent = 'すべての時間帯（指定なし）';
+      if (selectedTimesSummary) selectedTimesSummary.textContent = '時間帯: 全時間帯（指定なし）';
+    } else if (selectedStartTimes.length === TIME_SLOTS.length) {
+      timePicklistPlaceholder.textContent = 'すべての時間帯 (全選択)';
+      if (selectedTimesSummary) selectedTimesSummary.textContent = '時間帯: すべての時間帯';
     } else {
-      const names = selectedStartTimes.map(t => t === '07' ? '〜07時台' : t === '11' ? '11時台以降' : `${t}時台`);
-      selectedTimesSummary.textContent = `時間帯: ${names.join(', ')}`;
+      const selectedNames = TIME_SLOTS
+        .filter(t => selectedStartTimes.includes(t.code))
+        .map(t => t.name.split(' ')[0]);
+
+      timePicklistPlaceholder.textContent = `${selectedNames.join(', ')}`;
+      if (selectedTimesSummary) selectedTimesSummary.textContent = `時間帯: ${selectedNames.join(', ')}`;
+
+      // タグ表示
+      TIME_SLOTS.filter(t => selectedStartTimes.includes(t.code)).forEach(t => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-time-tag';
+        tag.innerHTML = `${t.name} <span class="btn-remove-tag" title="削除">✕</span>`;
+        tag.querySelector('.btn-remove-tag').addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectedStartTimes = selectedStartTimes.filter(c => c !== t.code);
+          renderTimePicklistOptions();
+          updateTimePicklistUI();
+          performSearch();
+        });
+        selectedTimeTags.appendChild(tag);
+      });
     }
 
     renderApiUrlBanner();
@@ -653,7 +838,38 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       closeCalendar();
       closePrefPicklist();
+      closeTimePicklist();
       performSearch();
+    });
+
+    // 詳細条件の変更監視
+    const debouncedSearch = debounce(() => {
+      renderApiUrlBanner();
+      performSearch();
+    }, 350);
+
+    if (inputKeyword) {
+      inputKeyword.addEventListener('input', () => {
+        debouncedSearch();
+      });
+    }
+
+    [selectSort, selectPlayStyle, selectHighway, selectMaxCarTime, selectMaxTrainTime].forEach(select => {
+      if (select) {
+        select.addEventListener('change', () => {
+          renderApiUrlBanner();
+          performSearch();
+        });
+      }
+    });
+
+    [check2Sum, checkClubBusOnly, checkIncludeStay].forEach(chk => {
+      if (chk) {
+        chk.addEventListener('change', () => {
+          renderApiUrlBanner();
+          performSearch();
+        });
+      }
     });
 
     // 日付プリセットボタン
@@ -748,16 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // URLパラメータバナー: URLコピー
     if (btnCopyApiUrl) {
       btnCopyApiUrl.addEventListener('click', () => {
-        const playDate = inputPlayDate.value || formatDate(selectedDate);
-        const area = selectArea ? (selectArea.value || '8') : '8';
-        const params = {
-          playDate: playDate,
-          areaCode: area,
-          prefCodes: selectedPrefCodes,
-          startTimes: selectedStartTimes,
-          minRating: selectMinRating ? parseFloat(selectMinRating.value || 3.5) : 3.5,
-          excludeKeyword: inputExclude ? (inputExclude.value.trim() || 'アコーディア') : 'アコーディア'
-        };
+        const params = getSearchParams();
         const urlList = RakutenGoraAPI.buildPlanSearchUrls(params);
         const copyText = urlList.map(u => u.directUrl).join('\n');
         navigator.clipboard.writeText(copyText).then(() => {
@@ -800,6 +1007,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
+  }
+
+  /**
+   * 簡易debounce関数
+   */
+  function debounce(fn, delay) {
+    let timer = null;
+    return function(...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), delay);
+    };
   }
 
   /**
@@ -854,8 +1072,16 @@ document.addEventListener('DOMContentLoaded', () => {
           ? selectedPrefNames 
           : `全県選択（${areaName}全域）`,
         startTimes: lastSearchParams.startTimes.map(t => `${t}時台`),
-        minRating: lastSearchParams.minRating,
-        excludeKeyword: lastSearchParams.excludeKeyword
+        NGPlan: lastSearchParams.includeStay ? 'planHalfRound,planLesson,planOpenCompe' : 'planHalfRound,planLesson,planOpenCompe,planStay',
+        sort: lastSearchParams.sort,
+        keyword: lastSearchParams.keyword || '(指定なし)',
+        playStyle: lastSearchParams.playStyle,
+        highway: lastSearchParams.highway,
+        maxCarTime: lastSearchParams.maxCarTime ? `${lastSearchParams.maxCarTime}分以内` : '(指定なし)',
+        maxTrainTime: lastSearchParams.maxTrainTime ? `${lastSearchParams.maxTrainTime}分以内` : '(指定なし)',
+        plan2Sum: lastSearchParams.plan2Sum ? '有効 (1)' : '指定なし',
+        clubBusOnly: lastSearchParams.clubBusOnly ? '有効 (あり限定)' : '指定なし',
+        includeStay: lastSearchParams.includeStay ? '有効 (宿泊含む)' : '除外 (NGPlan)'
       },
       検索結果件数: currentResults ? currentResults.length : 0,
       取得コース一覧: (currentResults || []).map(r => ({
@@ -863,8 +1089,8 @@ document.addEventListener('DOMContentLoaded', () => {
         name: r.name,
         address: r.address,
         evaluation: r.ratingDisplay,
-        trainTransit: `${r.trainTransit.minutes}分 (${r.trainTransit.label})`,
-        carTransit: `${r.carTransit.minutes}分 (${r.carTransit.label})`,
+        trainTransit: `${r.trainTransit.minutes}分 (${r.trainTransit.text})`,
+        carTransit: `${r.carTransit.minutes}分 (${r.carTransit.text})`,
         clubBus: r.clubBus.text
       }))
     };
@@ -879,14 +1105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     emptyState.style.display = 'none';
     resultsTable.style.display = 'none';
 
-    const params = {
-      playDate: inputPlayDate.value || formatDate(selectedDate),
-      areaCode: selectArea.value,
-      prefCodes: selectedPrefCodes, // 複数選択された都道府県コード配列
-      startTimes: selectedStartTimes, // 複数選択された時間帯配列
-      minRating: parseFloat(selectMinRating.value || 3.5),
-      excludeKeyword: inputExclude.value.trim() || 'アコーディア'
-    };
+    const params = getSearchParams();
 
     lastSearchParams = { ...params };
     lastSearchTime = new Date().toLocaleString('ja-JP');
@@ -1160,4 +1379,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 初期実行
   init();
-});
+}
+
+// DOMのロード状態に応じた確実な起動処理
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
