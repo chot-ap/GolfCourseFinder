@@ -196,7 +196,6 @@ body {
   font-size: 0.8rem;
 }
 
-/* Search Hero / Filter Card */
 .search-card {
   background: var(--bg-glass);
   backdrop-filter: blur(20px);
@@ -207,7 +206,8 @@ body {
   margin-bottom: 2rem;
   box-shadow: var(--shadow-lg);
   position: relative;
-  overflow: hidden;
+  overflow: visible; /* カレンダーやドロップダウンが途切れないようにvisibleに設定 */
+  z-index: 30;
 }
 
 .search-card::before {
@@ -336,15 +336,15 @@ select.form-control option {
 /* Interactive Calendar Widget (Dropdown) */
 .calendar-widget {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 0;
   width: 320px;
   background: #0d1527;
   border: 1px solid var(--border-glass-bright);
   border-radius: var(--radius-lg);
-  padding: 1rem;
-  box-shadow: var(--shadow-lg);
-  z-index: 50;
+  padding: 1.1rem;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8), 0 0 20px rgba(16, 185, 129, 0.15);
+  z-index: 1000; /* 最前面に確実に表示 */
   display: none;
   animation: fadeIn 0.15s ease-out;
 }
@@ -497,8 +497,8 @@ select.form-control option {
   border: 1px solid var(--border-glass-bright);
   border-radius: var(--radius-lg);
   padding: 0.85rem;
-  box-shadow: var(--shadow-lg);
-  z-index: 55;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8);
+  z-index: 999;
   display: none;
   animation: fadeIn 0.15s ease-out;
 }

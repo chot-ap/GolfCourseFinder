@@ -205,18 +205,25 @@ const RakutenGoraAPI = (() => {
       const courseId = golfCourse.golfCourseId;
 
       // ゴルフ場詳細公式ページURL（正規URLの生成）
-      const validDetailUrl = (golfCourse.golfCourseDetailUrl && !golfCourse.golfCourseDetailUrl.endsWith('.jp/'))
-        ? golfCourse.golfCourseDetailUrl
-        : `https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/${courseId}/`;
+      let coursePageUrl = '';
+      if (golfCourse.golfCourseDetailUrl && !golfCourse.golfCourseDetailUrl.endsWith('.jp/') && !golfCourse.golfCourseDetailUrl.endsWith('.jp')) {
+        coursePageUrl = golfCourse.golfCourseDetailUrl.replace(/^http:\/\//i, 'https://');
+      } else {
+        coursePageUrl = `https://gora.golf.rakuten.co.jp/domestic/course/${courseId}/`;
+      }
 
-      const coursePageUrl = validDetailUrl;
-
-      // プラン予約ページURL（指定日予約URLの生成）
+      // プラン予約ページURL（指定日予約・空き枠カレンダーURLの生成）
+      let planReserveUrl = '';
       const firstPlanUrl = planInfoList.length > 0 && (planInfoList[0].planDetailUrl || planInfoList[0].reserveUrl)
         ? (planInfoList[0].planDetailUrl || planInfoList[0].reserveUrl)
         : null;
-      const planReserveUrl = firstPlanUrl || 
-        `https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/${courseId}/play_date/${playDateCompact}`;
+
+      if (firstPlanUrl) {
+        planReserveUrl = firstPlanUrl.replace(/^http:\/\//i, 'https://');
+      } else {
+        // 楽天GORA公式の空き枠カレンダー・プラン選択ページ（404にならない正規URL）
+        planReserveUrl = `https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/${courseId}/`;
+      }
 
       filtered.push({
         id: courseId,
@@ -271,7 +278,7 @@ const RakutenGoraAPI = (() => {
   function getMockDatabase() {
     return [
       {
-        golfCourseId: 120077,
+        golfCourseId: 120150,
         golfCourseName: 'ムーンレイクゴルフクラブ 市原コース',
         golfCourseAbbr: 'ムーンレイク市原',
         prefCode: '12',
@@ -283,14 +290,14 @@ const RakutenGoraAPI = (() => {
         highway: '館山自動車道/市原ICより5km',
         clubBus: 'なし（JR内房線・五井駅よりタクシー約15分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120077/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/120150/',
         planInfo: [
-          { planId: 101, planName: '【キャディ付・昼食付】快適乗用カートプラン', price: 14800, callTime: '08:00', lunch: true },
-          { planId: 102, planName: '【セルフ・昼食付】GPSナビ付カート', price: 9800, callTime: '08:35', lunch: true }
+          { planId: 101, planName: '【キャディ付・昼食付】快適乗用カートプラン', price: 14800, callTime: '08:00', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/120150/' },
+          { planId: 102, planName: '【セルフ・昼食付】GPSナビ付カート', price: 9800, callTime: '08:35', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/120150/' }
         ]
       },
       {
-        golfCourseId: 120025,
+        golfCourseId: 120121,
         golfCourseName: '房総カントリークラブ 房総ゴルフ場',
         golfCourseAbbr: '房総CC',
         prefCode: '12',
@@ -302,14 +309,14 @@ const RakutenGoraAPI = (() => {
         highway: '首都圏中央連絡自動車道/市原鶴舞ICより12km',
         clubBus: 'あり（JR外房線・茂原駅南口よりクラブバス運行 ※要予約）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120025/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/120121/',
         planInfo: [
-          { planId: 103, planName: '【日本プロ開催コース】東コース セルフ昼食付', price: 16500, callTime: '07:45', lunch: true },
-          { planId: 104, planName: '西コースGPSナビ付乗用カートセルフ', price: 11000, callTime: '08:20', lunch: false }
+          { planId: 103, planName: '【日本プロ開催コース】東コース セルフ昼食付', price: 16500, callTime: '07:45', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/120121/' },
+          { planId: 104, planName: '西コースGPSナビ付乗用カートセルフ', price: 11000, callTime: '08:20', lunch: false, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/120121/' }
         ]
       },
       {
-        golfCourseId: 120058,
+        golfCourseId: 120133,
         golfCourseName: 'ミルフィーユゴルフクラブ',
         golfCourseAbbr: 'ミルフィーユGC',
         prefCode: '12',
@@ -321,13 +328,13 @@ const RakutenGoraAPI = (() => {
         highway: '京葉道路/蘇我ICより15km',
         clubBus: 'あり（JR内房線・浜野駅東口より毎日クラブバス運行）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120058/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/120133/',
         planInfo: [
-          { planId: 105, planName: '【平日限定】シェフ特製ランチバイキング付', price: 8900, callTime: '08:15', lunch: true }
+          { planId: 105, planName: '【平日限定】シェフ特製ランチバイキング付', price: 8900, callTime: '08:15', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/120133/' }
         ]
       },
       {
-        golfCourseId: 120015,
+        golfCourseId: 120037,
         golfCourseName: 'アコーディア・ゴルフ 習志野カントリークラブ',
         golfCourseAbbr: 'アコーディア習志野',
         prefCode: '12',
@@ -339,11 +346,11 @@ const RakutenGoraAPI = (() => {
         highway: '東関東自動車道/千葉北ICより18km',
         clubBus: 'あり（JR成田線・木下駅より運行）',
         golfCourseImageUrl: '',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120015/',
-        planInfo: [{ planId: 106, planName: 'トーナメントコースプラン', price: 25000, callTime: '08:00', lunch: true }]
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/120037/',
+        planInfo: [{ planId: 106, planName: 'トーナメントコースプラン', price: 25000, callTime: '08:00', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/120037/' }]
       },
       {
-        golfCourseId: 120054,
+        golfCourseId: 120029,
         golfCourseName: 'カメリアヒルズカントリークラブ',
         golfCourseAbbr: 'カメリアヒルズCC',
         prefCode: '12',
@@ -355,13 +362,13 @@ const RakutenGoraAPI = (() => {
         highway: '東京湾アクアライン連絡道/袖ヶ浦ICより5km',
         clubBus: 'あり（JR内房線・木更津駅東口より予約制送迎バス）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/120054/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/120029/',
         planInfo: [
-          { planId: 107, planName: '【アースモンダミンカップ開催】名門キャディ付プラン', price: 28500, callTime: '08:30', lunch: true }
+          { planId: 107, planName: '【アースモンダミンカップ開催】名門キャディ付プラン', price: 28500, callTime: '08:30', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/120029/' }
         ]
       },
       {
-        golfCourseId: 110034,
+        golfCourseId: 110059,
         golfCourseName: '飯能くすの樹カントリー倶楽部',
         golfCourseAbbr: '飯能くすの樹CC',
         prefCode: '11',
@@ -373,13 +380,13 @@ const RakutenGoraAPI = (() => {
         highway: '圏央道/狭山日高ICより10km',
         clubBus: 'あり（西武池袋線・飯能駅北口より定期クラブバス運行）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/110034/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/110059/',
         planInfo: [
-          { planId: 108, planName: '【乗用カートセルフ】昼食＆ドリンクバー付', price: 11500, callTime: '08:05', lunch: true }
+          { planId: 108, planName: '【乗用カートセルフ】昼食＆ドリンクバー付', price: 11500, callTime: '08:05', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/110059/' }
         ]
       },
       {
-        golfCourseId: 110033,
+        golfCourseId: 110072,
         golfCourseName: '武蔵丘ゴルフコース',
         golfCourseAbbr: '武蔵丘GC',
         prefCode: '11',
@@ -391,13 +398,13 @@ const RakutenGoraAPI = (() => {
         highway: '圏央道/狭山日高ICより6km',
         clubBus: 'あり（西武池袋線・飯能駅よりクラブバス運行 ※約10分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/110033/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/110072/',
         planInfo: [
-          { planId: 109, planName: '【トーナメント開催】樋口久子三菱電機レディスコース', price: 17800, callTime: '08:15', lunch: true }
+          { planId: 109, planName: '【トーナメント開催】樋口久子三菱電機レディスコース', price: 17800, callTime: '08:15', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/110072/' }
         ]
       },
       {
-        golfCourseId: 140018,
+        golfCourseId: 140023,
         golfCourseName: '大厚木カントリークラブ 本コース',
         golfCourseAbbr: '大厚木本コース',
         prefCode: '14',
@@ -409,13 +416,13 @@ const RakutenGoraAPI = (() => {
         highway: '東名高速道路/厚木ICより12km (圏央道/厚木西ICより8km)',
         clubBus: 'あり（小田急線・本厚木駅北口よりクラブバス運行）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/140018/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/140023/',
         planInfo: [
-          { planId: 111, planName: '【桜・楓コース】GPSナビ付カート・昼食付', price: 13500, callTime: '07:50', lunch: true }
+          { planId: 111, planName: '【桜・楓コース】GPSナビ付カート・昼食付', price: 13500, callTime: '07:50', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/140023/' }
         ]
       },
       {
-        golfCourseId: 140023,
+        golfCourseId: 140008,
         golfCourseName: '小田原湯本カントリークラブ',
         golfCourseAbbr: '小田原湯本CC',
         prefCode: '14',
@@ -427,15 +434,15 @@ const RakutenGoraAPI = (() => {
         highway: '小田原厚木道路/小田原西ICより5km',
         clubBus: 'あり（箱根登山鉄道・箱根湯本駅よりクラブバス約7分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/140023/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/140008/',
         planInfo: [
-          { planId: 112, planName: '箱根温泉リゾート・絶景富士山ビュープラン', price: 15900, callTime: '08:25', lunch: true }
+          { planId: 112, planName: '箱根温泉リゾート・絶景富士山ビュープラン', price: 15900, callTime: '08:25', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/140008/' }
         ]
       },
       {
-        golfCourseId: 80016,
-        golfCourseName: '阿見カントリークラブ',
-        golfCourseAbbr: '阿見CC',
+        golfCourseId: 80006,
+        golfCourseName: '阿見ゴルフクラブ',
+        golfCourseAbbr: '阿見GC',
         prefCode: '8',
         areaCode: '8',
         address: '茨城県稲敷郡阿見町上條1760-1',
@@ -445,9 +452,9 @@ const RakutenGoraAPI = (() => {
         highway: '圏央道/阿見東ICより3km',
         clubBus: 'あり（JR常磐線・荒川沖駅東口よりクラブバス運行 ※約15分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/80016/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/80006/',
         planInfo: [
-          { planId: 113, planName: '【インターから3分】フラット＆ワイドコース 昼食付', price: 12800, callTime: '08:10', lunch: true }
+          { planId: 113, planName: '【インターから3分】フラット＆ワイドコース 昼食付', price: 12800, callTime: '08:10', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/80006/' }
         ]
       },
       {
@@ -463,13 +470,13 @@ const RakutenGoraAPI = (() => {
         highway: '東北自動車道/宇都宮ICより15km',
         clubBus: 'なし（JR日光線・下野大沢駅よりタクシー約15分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/90035/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/90035/',
         planInfo: [
-          { planId: 114, planName: '【雄大な自然】美しくレイアウトされた18ホール 昼食付', price: 7900, callTime: '08:40', lunch: true }
+          { planId: 114, planName: '【雄大な自然】美しくレイアウトされた18ホール 昼食付', price: 7900, callTime: '08:40', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/90035/' }
         ]
       },
       {
-        golfCourseId: 190019,
+        golfCourseId: 190031,
         golfCourseName: '富士クラシック',
         golfCourseAbbr: '富士クラシック',
         prefCode: '19',
@@ -481,9 +488,9 @@ const RakutenGoraAPI = (() => {
         highway: '中央自動車道/河口湖ICより25km (新東名/新富士ICより30km)',
         clubBus: 'なし（富士急行線・河口湖駅よりタクシー約30分）',
         golfCourseImageUrl: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&auto=format&fit=crop&q=80',
-        golfCourseDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/guide/disp/c_id/190019/',
+        golfCourseDetailUrl: 'https://gora.golf.rakuten.co.jp/domestic/course/190031/',
         planInfo: [
-          { planId: 115, planName: '【標高1200m富士の裾野】リンクススタイルの爽快ゴルフ 昼食付', price: 14000, callTime: '08:20', lunch: true }
+          { planId: 115, planName: '【標高1200m富士の裾野】リンクススタイルの爽快ゴルフ 昼食付', price: 14000, callTime: '08:20', lunch: true, planDetailUrl: 'https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/190031/' }
         ]
       }
     ];
