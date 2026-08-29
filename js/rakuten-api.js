@@ -5,8 +5,10 @@
 
 const RakutenGoraAPI = (() => {
   const STORAGE_KEY_APP_ID = 'golfcourse_finder_app_id';
-  const PLAN_SEARCH_ENDPOINT = 'https://app.rakuten.co.jp/services/api/Gora/GoraPlanSearch/20170623';
-  const DETAIL_ENDPOINT = 'https://app.rakuten.co.jp/services/api/Gora/GoraGolfCourseDetail/20170623';
+  const STORAGE_KEY_ACCESS_KEY = 'golfcourse_finder_access_key';
+  const STORAGE_KEY_APP_URL = 'golfcourse_finder_app_url';
+  const PLAN_SEARCH_ENDPOINT = 'https://openapi.rakuten.co.jp/engine/api/Gora/GoraPlanSearch/20170623';
+  const DETAIL_ENDPOINT = 'https://openapi.rakuten.co.jp/engine/api/Gora/GoraGolfCourseDetail/20170623';
 
   /**
    * 保存されたApplicationIdを取得
@@ -20,18 +22,57 @@ const RakutenGoraAPI = (() => {
   }
 
   /**
-   * ApplicationIdを保存
+   * 保存されたAccessKeyを取得
    */
-  function setStoredAppId(appId) {
+  function getStoredAccessKey() {
+    try {
+      return localStorage.getItem(STORAGE_KEY_ACCESS_KEY) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * 保存された登録アプリURL(Referer)を取得
+   */
+  function getStoredAppUrl() {
+    try {
+      return localStorage.getItem(STORAGE_KEY_APP_URL) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * ApplicationId, AccessKey, 登録アプリURLを保存
+   */
+  function setStoredApiKeys(appId, accessKey, appUrl) {
     try {
       if (appId) {
         localStorage.setItem(STORAGE_KEY_APP_ID, appId.trim());
       } else {
         localStorage.removeItem(STORAGE_KEY_APP_ID);
       }
+
+      if (accessKey) {
+        localStorage.setItem(STORAGE_KEY_ACCESS_KEY, accessKey.trim());
+      } else {
+        localStorage.removeItem(STORAGE_KEY_ACCESS_KEY);
+      }
+
+      if (appUrl) {
+        localStorage.setItem(STORAGE_KEY_APP_URL, appUrl.trim());
+      } else {
+        localStorage.removeItem(STORAGE_KEY_APP_URL);
+      }
     } catch (e) {
       console.error('LocalStorage error:', e);
     }
+  }
+
+  // 互換性のためのエイリアス
+  function setStoredAppId(appId) {
+    setStoredApiKeys(appId, getStoredAccessKey(), getStoredAppUrl());
   }
 
   /**
@@ -41,7 +82,17 @@ const RakutenGoraAPI = (() => {
    */
   async function searchPlans(params) {
     const appId = params.appId || getStoredAppId();
+    const accessKey = params.accessKey || getStoredAccessKey();
     const isDemoMode = params.isDemo || !appId;
+
+    console.group('⛳ [GolfCourseFinder] 検索実行');
+    console.log('検索パラメータ:', params);
+    console.log('認証情報:', {
+      applicationId: appId ? (appId.slice(0, 4) + '...' + appId.slice(-4)) : '未設定',
+      accessKey: accessKey ? (accessKey.slice(0, 5) + '...' + accessKey.slice(-4)) : '未設定'
+    });
+    console.log('動作モード:', isDemoMode ? '🟡 デモ・モックデータモード' : '🟢 楽天GORA OpenAPI連携モード');
+    console.groupEnd();
 
     if (isDemoMode) {
       // デモ・モックデータで検索シミュレーション
@@ -54,7 +105,7 @@ const RakutenGoraAPI = (() => {
         ? params.prefCodes 
         : (params.prefCode ? [params.prefCode] : ['']);
 
-      const fetchPromises = prefCodes.map(pref => fetchSingleQuery(appId, { ...params, prefCode: pref }));
+      const fetchPromises = prefCodes.map(pref => fetchSingleQuery(appId, accessKey, { ...params, prefCode: pref }));
       const resultsArray = await Promise.all(fetchPromises);
 
       // 全結果のフラット化と重複排除（courseIdベース）
@@ -77,11 +128,74 @@ const RakutenGoraAPI = (() => {
   }
 
   /**
+   * GoraPlanSearchリクエスト用のURL・クエリパラメータオブジェクト配列を生成
+   * @param {Object} params 検索条件
+   * @returns {Array<{prefCode: string, url: string, queryString: string, paramsObject: Object}>}
+   */
+  function buildPlanSearchUrls(params) {
+    const rawAppId = params.appId || getStoredAppId();
+    const rawAccessKey = params.accessKey || getStoredAccessKey();
+    const appId = rawAppId || 'YOUR_APPLICATION_ID';
+    const accessKey = rawAccessKey || 'YOUR_ACCESS_KEY';
+
+    const prefCodes = params.prefCodes && params.prefCodes.length > 0 
+      ? params.prefCodes 
+      : (params.prefCode ? [params.prefCode] : ['']);
+
+    return prefCodes.map(pref => {
+      const queryParams = new URLSearchParams({
+        applicationId: appId,
+        accessKey: accessKey,
+        format: 'json',
+        playDate: params.playDate || '',
+        hits: '30',
+        page: params.page || '1',
+        sort: 'evaluation'
+      });
+
+      if (pref) {
+        queryParams.append('prefCode', pref);
+      } else if (params.areaCode) {
+        queryParams.append('areaCode', params.areaCode);
+      }
+
+      // 時間帯
+      if (params.startTimes && Array.isArray(params.startTimes) && params.startTimes.length > 0) {
+        const sortedTimes = [...params.startTimes].map(t => parseInt(t, 10)).sort((a, b) => a - b);
+        const minHour = sortedTimes[0];
+        const maxHour = sortedTimes[sortedTimes.length - 1];
+        queryParams.append('startTime', String(minHour).padStart(2, '0'));
+        queryParams.append('endTime', String(maxHour).padStart(2, '0'));
+      } else if (params.startTime) {
+        queryParams.append('startTime', params.startTime);
+      }
+
+      if (params.minPrice) queryParams.append('minPrice', params.minPrice);
+      if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
+
+      const queryString = queryParams.toString();
+      const directUrl = `${PLAN_SEARCH_ENDPOINT}?${queryString}`;
+      const proxyUrl = `/api/plan-search?${queryString}`;
+
+      return {
+        prefCode: pref,
+        directUrl,
+        proxyUrl,
+        queryString,
+        hasAppId: !!rawAppId,
+        hasAccessKey: !!rawAccessKey,
+        paramsObject: Object.fromEntries(queryParams.entries())
+      };
+    });
+  }
+
+  /**
    * 単一クエリのAPIリクエスト実行
    */
-  async function fetchSingleQuery(appId, params) {
+  async function fetchSingleQuery(appId, accessKey, params) {
     const queryParams = new URLSearchParams({
       applicationId: appId,
+      accessKey: accessKey,
       format: 'json',
       playDate: params.playDate, // YYYY-MM-DD
       hits: '30',
@@ -89,8 +203,11 @@ const RakutenGoraAPI = (() => {
       sort: 'evaluation'
     });
 
-    if (params.areaCode) queryParams.append('areaCode', params.areaCode);
-    if (params.prefCode) queryParams.append('prefCode', params.prefCode);
+    if (params.prefCode) {
+      queryParams.append('prefCode', params.prefCode);
+    } else if (params.areaCode) {
+      queryParams.append('areaCode', params.areaCode);
+    }
 
     // 複数選択された時間帯からAPIの開始・終了時間を設定
     if (params.startTimes && Array.isArray(params.startTimes) && params.startTimes.length > 0) {
@@ -105,6 +222,13 @@ const RakutenGoraAPI = (() => {
 
     if (params.minPrice) queryParams.append('minPrice', params.minPrice);
     if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
+
+    const appUrl = params.appUrl || getStoredAppUrl() || '';
+    if (appUrl) {
+      queryParams.append('customReferer', appUrl);
+    }
+
+    console.log(`🌐 [楽天OpenAPIリクエスト] パラメータ: ${queryParams.toString()}`);
 
     let data;
     try {
@@ -162,6 +286,16 @@ const RakutenGoraAPI = (() => {
       // 【出力条件2】名称に「アコーディア」が含まれている場合は除外
       if (excludeKeyword && (courseName.includes(excludeKeyword) || courseAbbr.includes(excludeKeyword))) {
         return;
+      }
+
+      // 【出力条件3】選択された都道府県コードの一致（APIやデータの都道府県コード安全検証）
+      const activePrefCodes = params.prefCodes && params.prefCodes.length > 0
+        ? params.prefCodes
+        : (params.prefCode ? [params.prefCode] : []);
+      if (activePrefCodes.length > 0 && golfCourse.prefCode) {
+        if (!activePrefCodes.includes(String(golfCourse.prefCode))) {
+          return;
+        }
       }
 
       // 時間帯フィルター（選択された時間帯がある場合）
@@ -263,10 +397,14 @@ const RakutenGoraAPI = (() => {
     
     // エリア・県フィルター
     let filtered = mockDatabase;
-    if (params.prefCode) {
-      filtered = filtered.filter(c => c.prefCode === params.prefCode);
+    const activePrefCodes = params.prefCodes && params.prefCodes.length > 0
+      ? params.prefCodes
+      : (params.prefCode ? [params.prefCode] : []);
+
+    if (activePrefCodes.length > 0) {
+      filtered = filtered.filter(c => activePrefCodes.includes(String(c.prefCode)));
     } else if (params.areaCode) {
-      filtered = filtered.filter(c => c.areaCode === params.areaCode);
+      filtered = filtered.filter(c => String(c.areaCode) === String(params.areaCode));
     }
 
     return processAndFilterCourses(filtered, params);
@@ -498,9 +636,13 @@ const RakutenGoraAPI = (() => {
 
   return {
     searchPlans,
+    buildPlanSearchUrls,
     processAndFilterCourses,
     getStoredAppId,
     setStoredAppId,
+    getStoredAccessKey,
+    getStoredAppUrl,
+    setStoredApiKeys,
     getMockDatabase
   };
 })();
