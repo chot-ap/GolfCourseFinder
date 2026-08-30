@@ -281,10 +281,11 @@ const RakutenGoraAPI = (() => {
     if (params.minPrice) queryParams.append('minPrice', params.minPrice);
     if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
 
-    const appUrl = params.appUrl || getStoredAppUrl() || '';
-    if (appUrl) {
-      queryParams.append('customReferer', appUrl);
-    }
+    // プログラム中のReferer設定（コメントアウト）
+    // const appUrl = params.appUrl || getStoredAppUrl() || '';
+    // if (appUrl) {
+    //   queryParams.append('customReferer', appUrl);
+    // }
 
     console.log(`🌐 [楽天OpenAPIリクエスト] パラメータ: ${queryParams.toString()}`);
 

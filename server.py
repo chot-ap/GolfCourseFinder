@@ -44,11 +44,10 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
     def proxy_rakuten_api(self, target_base_url, query_string):
         parsed_params = urllib.parse.parse_qs(query_string)
 
-        # クライアントから指定されたカスタムReferer（またはデフォルト）
-        custom_referer = parsed_params.get('customReferer', [None])[0] or self.headers.get('X-Rakuten-App-Url')
-        if not custom_referer or 'localhost' in custom_referer:
-            # 楽天管理画面でlocalhostが登録できないため、登録されたURLまたは公開ドメイン形式にフォールバック
-            custom_referer = custom_referer or 'https://example.com/'
+        # クライアントから指定されたカスタムReferer（またはデフォルト）- コメントアウト
+        # custom_referer = parsed_params.get('customReferer', [None])[0] or self.headers.get('X-Rakuten-App-Url')
+        # if not custom_referer or 'localhost' in custom_referer:
+        #     custom_referer = custom_referer or 'https://example.com/'
 
         # 楽天API宛のリクエストURLから内部パラメータ（customReferer）を除外
         rakuten_params = {k: v for k, v in parsed_params.items() if k != 'customReferer'}
@@ -58,7 +57,7 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
         print("\n" + "="*60)
         print(f"📡 [API Proxy] 楽天GORA OpenAPIリクエスト転送")
         print(f"   エンドポイント: {target_base_url}")
-        print(f"   送信Referer: {custom_referer}")
+        # print(f"   送信Referer: {custom_referer}")
         print(f"   クエリパラメータ:")
         for k, v in rakuten_params.items():
             val_display = v[0] if len(v) == 1 else str(v)
@@ -69,8 +68,8 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
 
         req_headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 GolfCourseFinder/1.0',
-            'Referer': custom_referer,
-            'Origin': custom_referer.rstrip('/')
+            # 'Referer': custom_referer,
+            # 'Origin': custom_referer.rstrip('/')
         }
 
         try:
