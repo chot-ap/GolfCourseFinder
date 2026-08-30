@@ -380,6 +380,11 @@ const RakutenGoraAPI = (() => {
       ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       : false;
 
+    if (isLocalhost) {
+      const appUrl = getStoredAppUrl() || 'https://example.com/';
+      queryParams.append('customReferer', appUrl);
+    }
+
     const targetUrl = isLocalhost 
       ? `/api/plan-search?${queryParams.toString()}` 
       : `${PLAN_SEARCH_ENDPOINT}?${queryParams.toString()}`;
@@ -438,7 +443,7 @@ const RakutenGoraAPI = (() => {
       const golfCourse = item.golfCourse || item;
       const planInfoList = item.planInfo || [];
 
-      const courseId = String(golfCourse.golfCourseId || item.golfCourseId || '');
+      const targetCourseId = String(golfCourse.golfCourseId || item.golfCourseId || '');
       const courseName = golfCourse.golfCourseName || '';
       const courseAbbr = golfCourse.golfCourseAbbr || '';
       const address = golfCourse.address || '';
@@ -581,7 +586,7 @@ const RakutenGoraAPI = (() => {
       if (golfCourse.golfCourseDetailUrl && !golfCourse.golfCourseDetailUrl.endsWith('.jp/') && !golfCourse.golfCourseDetailUrl.endsWith('.jp')) {
         coursePageUrl = golfCourse.golfCourseDetailUrl.replace(/^http:\/\//i, 'https://');
       } else {
-        coursePageUrl = `https://gora.golf.rakuten.co.jp/domestic/course/${courseId}/`;
+        coursePageUrl = `https://gora.golf.rakuten.co.jp/domestic/course/${targetCourseId}/`;
       }
 
       // プラン予約ページURL
@@ -593,11 +598,11 @@ const RakutenGoraAPI = (() => {
       if (firstPlanUrl) {
         planReserveUrl = firstPlanUrl.replace(/^http:\/\//i, 'https://');
       } else {
-        planReserveUrl = `https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/${courseId}/`;
+        planReserveUrl = `https://booking.gora.golf.rakuten.co.jp/calendar/disp/c_id/${targetCourseId}/`;
       }
 
       filtered.push({
-        id: courseId,
+        id: targetCourseId,
         date: playDateStr,
         name: courseName,
         abbr: courseAbbr,

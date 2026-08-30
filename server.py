@@ -42,6 +42,12 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
+        # 304 Not Modifiedキャッシュを完全に防ぐため、条件付きリクエストヘッダーを除去して常に200最新ファイルを配信
+        if 'If-Modified-Since' in self.headers:
+            del self.headers['If-Modified-Since']
+        if 'If-None-Match' in self.headers:
+            del self.headers['If-None-Match']
+
         # 静的ファイルの配信
         super().do_GET()
 
@@ -54,10 +60,10 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
     def proxy_rakuten_api(self, target_base_url, query_string):
         parsed_params = urllib.parse.parse_qs(query_string)
 
-        # クライアントから指定されたカスタムReferer（またはデフォルト）- コメントアウト
-        # custom_referer = parsed_params.get('customReferer', [None])[0] or self.headers.get('X-Rakuten-App-Url')
-        # if not custom_referer or 'localhost' in custom_referer:
-        #     custom_referer = custom_referer or 'https://example.com/'
+        # クライアントから指定されたカスタムReferer（またはデフォルト）
+        custom_referer = parsed_params.get('customReferer', [None])[0] or self.headers.get('X-Rakuten-App-Url')
+        if not custom_referer or 'localhost' in custom_referer or '127.0.0.1' in custom_referer:
+            custom_referer = custom_referer if (custom_referer and 'localhost' not in custom_referer and '127.0.0.1' not in custom_referer) else 'https://example.com/'
 
         # 楽天API宛のリクエストURLから内部パラメータ（customReferer）を除外
         rakuten_params = {k: v for k, v in parsed_params.items() if k != 'customReferer'}
@@ -67,7 +73,7 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
         print("\n" + "="*60)
         print(f"📡 [API Proxy] 楽天GORA OpenAPIリクエスト転送")
         print(f"   エンドポイント: {target_base_url}")
-        # print(f"   送信Referer: {custom_referer}")
+        print(f"   送信Referer: {custom_referer}")
         print(f"   クエリパラメータ:")
         for k, v in rakuten_params.items():
             val_display = v[0] if len(v) == 1 else str(v)
@@ -78,8 +84,8 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
 
         req_headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 GolfCourseFinder/1.0',
-            # 'Referer': custom_referer,
-            # 'Origin': custom_referer.rstrip('/')
+            'Referer': custom_referer,
+            'Origin': custom_referer.rstrip('/')
         }
 
         try:
