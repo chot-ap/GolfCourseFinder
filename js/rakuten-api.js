@@ -311,18 +311,6 @@ const RakutenGoraAPI = (() => {
     return data.Items.map(item => item.Item);
   }
 
-  // 都道府県コードと都道府県名のマッピング（全国対応）
-  const PREF_NAMES_BY_CODE = {
-    '1': '北海道', '2': '青森県', '3': '岩手県', '4': '宮城県', '5': '秋田県', '6': '山形県', '7': '福島県',
-    '8': '茨城県', '9': '栃木県', '10': '群馬県', '11': '埼玉県', '12': '千葉県', '13': '東京都', '14': '神奈川県',
-    '15': '新潟県', '16': '富山県', '17': '石川県', '18': '福井県', '19': '山梨県', '20': '長野県',
-    '21': '岐阜県', '22': '静岡県', '23': '愛知県', '24': '三重県',
-    '25': '滋賀県', '26': '京都府', '27': '大阪府', '28': '兵庫県', '29': '奈良県', '30': '和歌山県',
-    '31': '鳥取県', '32': '島根県', '33': '岡山県', '34': '広島県', '35': '山口県',
-    '36': '徳島県', '37': '香川県', '38': '愛媛県', '39': '高知県',
-    '40': '福岡県', '41': '佐賀県', '42': '長崎県', '43': '熊本県', '44': '大分県', '45': '宮崎県', '46': '鹿児島県', '47': '沖縄県'
-  };
-
   /**
    * ゴルフ場データのフィルタリングおよび交通時間の付与
    */
@@ -360,34 +348,6 @@ const RakutenGoraAPI = (() => {
       // 【出力条件2】名称に「アコーディア」が含まれている場合は除外
       if (excludeKeyword && (courseName.includes(excludeKeyword) || courseAbbr.includes(excludeKeyword))) {
         return;
-      }
-
-      // 【出力条件3】選択された都道府県コードの一致
-      const activePrefCodes = params.prefCodes && params.prefCodes.length > 0
-        ? params.prefCodes
-        : (params.prefCode ? [params.prefCode] : []);
-      if (activePrefCodes.length > 0) {
-        const itemPrefCode = String(golfCourse.prefCode || '');
-        const matchedByPrefCode = itemPrefCode && activePrefCodes.includes(itemPrefCode);
-
-        // courseId（例: 120015 -> 千葉12, 110032 -> 埼玉11, 80006 -> 茨城8）によるマッチング
-        const matchedByCourseId = activePrefCodes.some(code => {
-          if (code.length === 2 && courseId.startsWith(code)) return true;
-          if (code.length === 1 && courseId.startsWith(code + '0')) return true;
-          return false;
-        });
-
-        // 住所文字列（「千葉県」「埼玉」「神奈川」等）によるマッチング
-        const matchedByAddress = activePrefCodes.some(code => {
-          const prefName = PREF_NAMES_BY_CODE[code];
-          if (!prefName) return false;
-          const shortName = prefName.replace(/[都府県]$/, '');
-          return address.includes(shortName);
-        });
-
-        if (!matchedByPrefCode && !matchedByCourseId && !matchedByAddress) {
-          return;
-        }
       }
 
       // 【キーワード検索フィルター】コース名・略称・住所・高速・プラン名での部分一致
