@@ -69,6 +69,18 @@ function startApp() {
   const emptyState = document.getElementById('emptyState');
   const resultsTable = document.getElementById('resultsTable');
 
+  // DOM Elements - Request Parameters Card
+  const requestParamsCard = document.getElementById('requestParamsCard');
+  const requestParamsToggle = document.getElementById('requestParamsToggle');
+  const requestParamsToggleIcon = document.getElementById('requestParamsToggleIcon');
+  const requestParamsModeBadge = document.getElementById('requestParamsModeBadge');
+  const btnCopyRequestUrl = document.getElementById('btnCopyRequestUrl');
+  const btnCopyRequestParamsJson = document.getElementById('btnCopyRequestParamsJson');
+  const requestUrlCode = document.getElementById('requestUrlCode');
+  const requestParamsGrid = document.getElementById('requestParamsGrid');
+  const requestParamsCount = document.getElementById('requestParamsCount');
+  const requestTimeBadge = document.getElementById('requestTimeBadge');
+
   const btnExportFormat = document.getElementById('btnExportFormat');
   const btnExportCsv = document.getElementById('btnExportCsv');
   const btnSettings = document.getElementById('btnSettings');
@@ -850,62 +862,164 @@ function startApp() {
     });
 
     // 出力形式コピー / モーダル表示
-    btnExportFormat.addEventListener('click', () => {
-      openExportModal();
-    });
+    if (btnExportFormat) {
+      btnExportFormat.addEventListener('click', () => {
+        openExportModal();
+      });
+    }
 
     // CSVダウンロード
-    btnExportCsv.addEventListener('click', () => {
-      downloadCsv();
-    });
+    if (btnExportCsv) {
+      btnExportCsv.addEventListener('click', () => {
+        downloadCsv();
+      });
+    }
+
+    // リクエストパラメータカードの開閉トグル
+    if (requestParamsToggle) {
+      requestParamsToggle.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-copy-url')) return;
+        requestParamsCard.classList.toggle('collapsed');
+      });
+    }
+
+    // リクエストURLコピー
+    if (btnCopyRequestUrl) {
+      btnCopyRequestUrl.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentRequestInfo || !currentRequestInfo.fullUrl) return;
+        try {
+          await navigator.clipboard.writeText(currentRequestInfo.fullUrl);
+          showToast('📋 APIリクエストURLをコピーしました！');
+        } catch (err) {
+          const textarea = document.createElement('textarea');
+          textarea.value = currentRequestInfo.fullUrl;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          showToast('📋 APIリクエストURLをコピーしました！');
+        }
+      });
+    }
+
+    // パラメータJSONコピー
+    if (btnCopyRequestParamsJson) {
+      btnCopyRequestParamsJson.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentRequestInfo || !currentRequestInfo.params) return;
+        const jsonStr = JSON.stringify(currentRequestInfo.params, null, 2);
+        try {
+          await navigator.clipboard.writeText(jsonStr);
+          showToast('📄 パラメータJSONをコピーしました！');
+        } catch (err) {
+          const textarea = document.createElement('textarea');
+          textarea.value = jsonStr;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          showToast('📄 パラメータJSONをコピーしました！');
+        }
+      });
+    }
 
     // 設定モーダル
-    btnSettings.addEventListener('click', () => {
-      if (inputAppId) inputAppId.value = RakutenGoraAPI.getStoredAppId();
-      if (inputAccessKey) inputAccessKey.value = RakutenGoraAPI.getStoredAccessKey();
-      if (inputAppUrl) inputAppUrl.value = RakutenGoraAPI.getStoredAppUrl();
-      settingsModal.classList.add('active');
-    });
+    if (btnSettings) {
+      btnSettings.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSettingsModal();
+      });
+    }
 
     // APIキー保存
-    btnSaveApiKey.addEventListener('click', () => {
-      const appId = inputAppId ? inputAppId.value.trim() : '';
-      const accessKey = inputAccessKey ? inputAccessKey.value.trim() : '';
-      const appUrl = inputAppUrl ? inputAppUrl.value.trim() : '';
-      RakutenGoraAPI.setStoredApiKeys(appId, accessKey, appUrl);
-      updateApiStatusDisplay();
-      settingsModal.classList.remove('active');
-      showToast('楽天OpenAPI設定を保存しました');
-      performSearch();
-    });
+    if (btnSaveApiKey) {
+      btnSaveApiKey.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const appId = inputAppId ? inputAppId.value.trim() : '';
+        const accessKey = inputAccessKey ? inputAccessKey.value.trim() : '';
+        const appUrl = inputAppUrl ? inputAppUrl.value.trim() : '';
+        RakutenGoraAPI.setStoredApiKeys(appId, accessKey, appUrl);
+        updateApiStatusDisplay();
+        closeSettingsModal();
+        showToast('楽天OpenAPI設定を保存しました');
+        performSearch();
+      });
+    }
 
     // APIキークリア
-    btnClearApiKey.addEventListener('click', () => {
-      if (inputAppId) inputAppId.value = '';
-      if (inputAccessKey) inputAccessKey.value = '';
-      if (inputAppUrl) inputAppUrl.value = '';
-      RakutenGoraAPI.setStoredApiKeys('', '', '');
-      updateApiStatusDisplay();
-      showToast('API設定をクリアしデモモードに戻しました');
-    });
+    if (btnClearApiKey) {
+      btnClearApiKey.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (inputAppId) inputAppId.value = '';
+        if (inputAccessKey) inputAccessKey.value = '';
+        if (inputAppUrl) inputAppUrl.value = '';
+        RakutenGoraAPI.setStoredApiKeys('', '', '');
+        updateApiStatusDisplay();
+        showToast('API設定をクリアしデモモードに戻しました');
+      });
+    }
 
     // エクスポートテキストコピー
-    btnCopyExport.addEventListener('click', () => {
-      exportTextarea.select();
-      navigator.clipboard.writeText(exportTextarea.value).then(() => {
-        showToast('指定形式テキストをクリップボードにコピーしました！');
+    if (btnCopyExport) {
+      btnCopyExport.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (exportTextarea) {
+          exportTextarea.select();
+          navigator.clipboard.writeText(exportTextarea.value).then(() => {
+            showToast('指定形式テキストをクリップボードにコピーしました！');
+          });
+        }
+      });
+    }
+
+    // モーダルカード内のクリックはオーバーレイにバブリングさせない
+    document.querySelectorAll('.modal-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        e.stopPropagation();
       });
     });
 
-    // モーダルクローズ
-    document.querySelectorAll('.modal-overlay .btn-close, .modal-overlay').forEach(el => {
-      el.addEventListener('click', (e) => {
-        if (e.target === el || e.target.classList.contains('btn-close')) {
-          document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+    // モーダルクローズ（閉じるボタン or オーバーレイ背景クリック）
+    document.querySelectorAll('.modal-overlay .btn-close').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeAllModals();
+      });
+    });
+
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          closeAllModals();
         }
       });
     });
   }
+
+  function openSettingsModal() {
+    closeCalendar();
+    closePrefPicklist();
+    closeTimePicklist();
+    if (inputAppId) inputAppId.value = RakutenGoraAPI.getStoredAppId();
+    if (inputAccessKey) inputAccessKey.value = RakutenGoraAPI.getStoredAccessKey();
+    if (inputAppUrl) inputAppUrl.value = RakutenGoraAPI.getStoredAppUrl();
+    if (settingsModal) settingsModal.classList.add('active');
+  }
+
+  function closeSettingsModal() {
+    if (settingsModal) settingsModal.classList.remove('active');
+  }
+
+  function closeAllModals() {
+    document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+  }
+
+  // グローバル公開（クリックイベントの確実な実行のため）
+  window.openSettingsModal = openSettingsModal;
+  window.closeSettingsModal = closeSettingsModal;
+  window.openExportModal = openExportModal;
+  window.closeAllModals = closeAllModals;
 
   /**
    * 簡易debounce関数
@@ -937,6 +1051,64 @@ function startApp() {
     }
   }
 
+  let currentRequestInfo = null;
+
+  /**
+   * APIリクエストURLパラメータ情報の描画・更新 (Client ID / Access Key 除外)
+   */
+  function renderRequestParamsDisplay(params) {
+    if (!requestParamsCard) return;
+
+    const info = RakutenGoraAPI.getCleanRequestInfo(params);
+    currentRequestInfo = info;
+
+    const hasAppId = !!RakutenGoraAPI.getStoredAppId();
+    const hasAccessKey = !!RakutenGoraAPI.getStoredAccessKey();
+    const isOpenApi = hasAppId && hasAccessKey;
+
+    if (requestParamsModeBadge) {
+      if (isOpenApi) {
+        requestParamsModeBadge.textContent = '🟢 OpenAPI送信';
+        requestParamsModeBadge.style.color = 'var(--primary-light)';
+        requestParamsModeBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        requestParamsModeBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+      } else {
+        requestParamsModeBadge.textContent = '🟡 デモ・サンプル';
+        requestParamsModeBadge.style.color = 'var(--accent-gold)';
+        requestParamsModeBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+        requestParamsModeBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+      }
+    }
+
+    if (requestTimeBadge) {
+      requestTimeBadge.textContent = `リクエスト時刻: ${info.timestamp}`;
+    }
+
+    if (requestUrlCode) {
+      requestUrlCode.textContent = info.fullUrl;
+    }
+
+    if (requestParamsCount) {
+      requestParamsCount.textContent = info.paramList.length;
+    }
+
+    if (requestParamsGrid) {
+      requestParamsGrid.innerHTML = info.paramList.map(item => {
+        return `
+          <div class="param-item-card" title="${item.key}: ${item.description}">
+            <div class="param-item-header">
+              <span class="param-item-key">${item.key}</span>
+              <span class="param-item-desc">${item.description.split('(')[0].trim()}</span>
+            </div>
+            <div class="param-item-val">${item.value}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    requestParamsCard.style.display = 'block';
+  }
+
   let currentSearchAbortController = null;
 
   /**
@@ -956,6 +1128,9 @@ function startApp() {
 
     const params = getSearchParams();
     params.signal = currentSignal;
+
+    // リクエストパラメータ情報を画面上に即座に更新・表示
+    renderRequestParamsDisplay(params);
 
     lastSearchParams = { ...params };
     lastSearchTime = new Date().toLocaleString('ja-JP');

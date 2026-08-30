@@ -85,8 +85,12 @@ const RakutenGoraAPI = (() => {
     const accessKey = params.accessKey || getStoredAccessKey();
     const isDemoMode = params.isDemo || !appId;
 
+    const cleanInfo = getCleanRequestInfo(params);
+    lastRequestInfo = cleanInfo;
+
     console.group('⛳ [GolfCourseFinder] 検索実行');
-    console.log('検索パラメータ:', params);
+    console.log('📡 楽天GORA API送信URL (認証除外):', cleanInfo.fullUrl);
+    console.log('📋 送信パラメータ (Auth除外):', cleanInfo.params);
     console.log('認証情報:', {
       applicationId: appId ? (appId.slice(0, 4) + '...' + appId.slice(-4)) : '未設定',
       accessKey: accessKey ? (accessKey.slice(0, 5) + '...' + accessKey.slice(-4)) : '未設定'
@@ -136,14 +140,115 @@ const RakutenGoraAPI = (() => {
       const fallbackResults = await simulateSearch(params);
       fallbackResults._apiError = err.message;
       return fallbackResults;
+    } finally {
+      // 最新のリクエストパラメータ情報を記録
+      lastRequestInfo = getCleanRequestInfo(params);
     }
   }
 
+  let lastRequestInfo = null;
+
+  const PARAM_DESCRIPTIONS = {
+    format: 'データ形式 (固定: json)',
+    playDate: 'プレー日 (YYYY-MM-DD)',
+    areaCode: '地域・都道府県コード (CSV形式)',
+    hits: '1ページあたりの取得上限件数 (固定: 30)',
+    page: '取得ページ番号 (固定: 1)',
+    sort: '楽天GORAソート順 (evaluation: 総合評価順)',
+    minPrice: '下限料金 (10,000円〜)',
+    maxPrice: '上限料金 (指定時)',
+    planCart: '乗用カート (1: カート付き限定)',
+    planStay: '宿泊プラン (0: 宿泊なし, 1: 宿泊付き含む)',
+    planLunch: '昼食 (1: 昼食付限定)',
+    NGPlan: '除外プラン種別 (レッスン、オープンコンペ等を除外)',
+    shapeWideFairway: 'コース特徴 (1: フェアウェイが広いコース)',
+    icDistance: '高速IC距離 (4: 最寄ICから30km以内)',
+    startTimeZone: 'スタート時間帯コード (例: 8,9 -> 8時台, 9時台)',
+    keyword: 'キーワード検索 (コース名・住所等)',
+    plan2Sum: '2サム保証 (1: 2人予約可能)',
+    planCaddy: 'プレースタイル (1: キャディ付き)'
+  };
+
   /**
-   * GoraPlanSearchリクエスト用のURL・クエリパラメータオブジェクト配列を生成
+   * アプリケーションIDとアクセスキーを除外したAPIリクエストパラメータ情報を生成
    * @param {Object} params 検索条件
-   * @returns {Array<{prefCode: string, url: string, queryString: string, paramsObject: Object}>}
+   * @returns {Object} クリーンなパラメータオブジェクト、クエリ文字列、完全URL、説明リスト
    */
+  function getCleanRequestInfo(params) {
+    const prefCodes = params.prefCodes && params.prefCodes.length > 0
+      ? params.prefCodes
+      : (params.prefCode ? [params.prefCode] : (params.areaCode ? [params.areaCode] : []));
+
+    const effectiveAreaCode = prefCodes.join(',');
+
+    // 時間帯指定 (startTimeZone: CSV形式)
+    const validTimeZones = (params.startTimes || [])
+      .filter(t => t !== '0' && t !== 0 && t !== '');
+    const startTimeZoneValue = validTimeZones.length > 0 ? validTimeZones.join(',') : '';
+
+    const cleanParams = {
+      format: 'json',
+      playDate: params.playDate || '',
+      areaCode: effectiveAreaCode,
+      hits: '30',
+      page: '1',
+      sort: params.sort || 'evaluation',
+      minPrice: params.minPrice || '10000',
+      planCart: '1',
+      planStay: params.includeStay ? '1' : '0',
+      planLunch: '1',
+      NGPlan: 'planLesson,planOpenCompe,planRegularCompe,planHalfRound',
+      shapeWideFairway: '1',
+      icDistance: '4'
+    };
+
+    if (startTimeZoneValue) {
+      cleanParams.startTimeZone = startTimeZoneValue;
+    }
+
+    if (params.keyword && params.keyword.trim()) {
+      cleanParams.keyword = params.keyword.trim();
+    }
+
+    if (params.plan2Sum) {
+      cleanParams.plan2Sum = '1';
+    }
+
+    if (params.playStyle === 'caddy') {
+      cleanParams.planCaddy = '1';
+    }
+
+    if (params.maxPrice) {
+      cleanParams.maxPrice = String(params.maxPrice);
+    }
+
+    const queryParams = new URLSearchParams(cleanParams);
+    const queryString = queryParams.toString();
+    const fullUrl = `${PLAN_SEARCH_ENDPOINT}?${queryString}`;
+
+    const paramList = Object.entries(cleanParams).map(([key, value]) => ({
+      key,
+      value,
+      description: PARAM_DESCRIPTIONS[key] || 'カスタムパラメータ'
+    }));
+
+    return {
+      endpoint: PLAN_SEARCH_ENDPOINT,
+      params: cleanParams,
+      queryString,
+      fullUrl,
+      paramList,
+      descriptions: PARAM_DESCRIPTIONS,
+      timestamp: new Date().toLocaleTimeString('ja-JP')
+    };
+  }
+
+  /**
+   * 直近のリクエストパラメータ情報を取得
+   */
+  function getLastRequestInfo() {
+    return lastRequestInfo;
+  }
   function buildPlanSearchUrls(params) {
     const rawAppId = params.appId || getStoredAppId();
     const rawAccessKey = params.accessKey || getStoredAccessKey();
@@ -470,7 +575,6 @@ const RakutenGoraAPI = (() => {
 
       // プレー日フォーマット (YYYYMMDD)
       const playDateStr = params.playDate || new Date().toISOString().split('T')[0];
-      const courseId = golfCourse.golfCourseId;
 
       // ゴルフ場詳細公式ページURL
       let coursePageUrl = '';
@@ -807,6 +911,9 @@ const RakutenGoraAPI = (() => {
   return {
     searchPlans,
     buildPlanSearchUrls,
+    getCleanRequestInfo,
+    getLastRequestInfo,
+    PARAM_DESCRIPTIONS,
     processAndFilterCourses,
     getStoredAppId,
     setStoredAppId,

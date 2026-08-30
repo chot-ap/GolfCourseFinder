@@ -37,9 +37,19 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
         elif parsed_url.path == '/api/health':
             self.send_json_response(200, {"status": "ok", "app": "GolfCourseFinder"})
             return
+        elif parsed_url.path == '/favicon.ico':
+            self.send_response(204)
+            self.end_headers()
+            return
 
         # 静的ファイルの配信
         super().do_GET()
+
+    def end_headers(self):
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
 
     def proxy_rakuten_api(self, target_base_url, query_string):
         parsed_params = urllib.parse.parse_qs(query_string)
@@ -108,7 +118,10 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
         # コンソールログを簡潔に出力
-        sys.stderr.write(f"[{self.log_date_time_string()}] {args[0]} {args[1]} {args[2]}\n")
+        try:
+            sys.stderr.write(f"[{self.log_date_time_string()}] {format % args}\n")
+        except Exception:
+            sys.stderr.write(f"[{self.log_date_time_string()}] {' '.join(str(a) for a in args)}\n")
 
 def run_server(port=DEFAULT_PORT):
     for p in [port, 8080, 3000, 5000, 8888]:

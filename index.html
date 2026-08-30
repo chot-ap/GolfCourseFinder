@@ -11,8 +11,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛳</text></svg>">
+
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260830_6">
 </head>
 <body>
   <div class="bg-mesh"></div>
@@ -30,7 +33,7 @@
 
       <div class="header-actions">
         <span id="apiStatusText" style="font-size: 0.8rem; font-weight: 600;">デモ/サンプルモード</span>
-        <button id="btnSettings" class="btn btn-secondary btn-sm" title="APIキー設定">
+        <button id="btnSettings" class="btn btn-secondary btn-sm" title="APIキー設定" onclick="if(window.openSettingsModal)window.openSettingsModal();">
           ⚙️ 設定 (API Key)
         </button>
       </div>
@@ -329,6 +332,51 @@
 
       <!-- Results Section -->
       <section id="resultsSection">
+        <!-- API リクエストパラメータ表示パネル (Client ID / Access Key 除外) -->
+        <div id="requestParamsCard" class="request-params-card" style="display: none;">
+          <div class="request-params-header" id="requestParamsToggle" title="クリックして詳細を開閉">
+            <div class="request-params-title-group">
+              <span class="pulse-dot"></span>
+              <span class="request-params-title">📡 実行されたAPIリクエストURLパラメータ</span>
+              <span class="request-params-badge" id="requestParamsModeBadge">OpenAPI</span>
+              <span class="request-params-badge-auth">🔒 認証情報(Client ID/Access Key)除外済</span>
+            </div>
+            <div class="request-params-header-actions">
+              <button type="button" class="btn-copy-url" id="btnCopyRequestUrl" title="リクエストURLをコピー">
+                📋 URLコピー
+              </button>
+              <button type="button" class="btn-copy-url" id="btnCopyRequestParamsJson" title="パラメータJSONをコピー">
+                📄 JSONコピー
+              </button>
+              <span class="request-params-toggle-icon" id="requestParamsToggleIcon">▼</span>
+            </div>
+          </div>
+
+          <div class="request-params-body" id="requestParamsBody">
+            <!-- 送信先API URL -->
+            <div class="request-url-preview-wrapper">
+              <div class="request-url-label-row">
+                <span class="request-url-label">🌐 楽天GORA API 送信URLプレビュー:</span>
+                <span class="request-time-badge" id="requestTimeBadge"></span>
+              </div>
+              <div class="request-url-code-box">
+                <code id="requestUrlCode" class="request-url-code"></code>
+              </div>
+            </div>
+
+            <!-- パラメータ一覧テーブル／グリッド -->
+            <div class="request-params-grid-wrapper">
+              <div class="request-params-grid-title">
+                <span>📋 送信パラメータ詳細一覧 (全 <strong id="requestParamsCount">0</strong> 項目)</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">※ アプリケーションIDとアクセスキー以外の全クエリパラメータ</span>
+              </div>
+              <div class="request-params-grid" id="requestParamsGrid">
+                <!-- JSで動的生成 -->
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="results-header">
           <div class="results-count-title">
             <h2>検索結果</h2>
@@ -462,8 +510,8 @@
   </div>
 
   <!-- Scripts -->
-  <script src="js/transit-calculator.js"></script>
-  <script src="js/rakuten-api.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/transit-calculator.js?v=20260830_6"></script>
+  <script src="js/rakuten-api.js?v=20260830_6"></script>
+  <script src="js/app.js?v=20260830_6"></script>
 </body>
 </html>
