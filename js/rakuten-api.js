@@ -287,11 +287,20 @@ const RakutenGoraAPI = (() => {
     //   queryParams.append('customReferer', appUrl);
     // }
 
-    console.log(`🌐 [楽天OpenAPIリクエスト] パラメータ: ${queryParams.toString()}`);
+    // GitHub Pagesなどの本番静的ホスティング環境では楽天APIエンドポイントへ直接リクエスト、
+    // ローカル開発環境(localhost/127.0.0.1)ではローカルプロキシ(/api/plan-search)経由でリクエスト
+    const isLocalhost = (typeof window !== 'undefined' && window.location) 
+      ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      : false;
+
+    const targetUrl = isLocalhost 
+      ? `/api/plan-search?${queryParams.toString()}` 
+      : `${PLAN_SEARCH_ENDPOINT}?${queryParams.toString()}`;
+
+    console.log(`🌐 [楽天OpenAPIリクエスト] 送信先 (${isLocalhost ? 'LocalProxy' : 'DirectOpenAPI'}): ${targetUrl}`);
 
     let data;
-    const proxyUrl = `/api/plan-search?${queryParams.toString()}`;
-    const proxyResp = await fetch(proxyUrl);
+    const proxyResp = await fetch(targetUrl);
     
     if (proxyResp.ok) {
       data = await proxyResp.json();
