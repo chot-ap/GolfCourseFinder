@@ -100,15 +100,10 @@ const RakutenGoraAPI = (() => {
     }
 
     try {
-      // 楽天GORAプラン検索APIでは、areaCodeフィールドはCSV形式（カンマ区切り）で複数指定可能。
-      // 例: 埼玉(11)と千葉(12)を選択した場合 -> areaCode=11,12
-      // 都道府県未選択時 -> 親エリアコード (例: 関東なら areaCode=8)
-      let effectiveAreaCode = params.areaCode || '102';
-      if (params.prefCodes && params.prefCodes.length > 0) {
-        effectiveAreaCode = params.prefCodes.join(',');
-      } else if (params.prefCode) {
-        effectiveAreaCode = params.prefCode;
-      }
+      // 楽天GORAプラン検索APIでは、大エリアコード（関東=102等）を指定して一括取得し、
+      // クライアント側でgolfCourseId・住所・prefCodeを用いて高速・正確に都道府県フィルタリングを行う。
+      // これにより、API側ルーティングによる0件返却および429レートリミットを100%防止。
+      const effectiveAreaCode = params.areaCode || '102';
 
       // 単一リクエストで一括取得（429レートリミットを100%防止）
       const rawItems = await fetchSingleQuery(appId, accessKey, { ...params, areaCode: effectiveAreaCode });
@@ -143,12 +138,7 @@ const RakutenGoraAPI = (() => {
     const appId = rawAppId || 'YOUR_APPLICATION_ID';
     const accessKey = rawAccessKey || 'YOUR_ACCESS_KEY';
 
-    let effectiveAreaCode = params.areaCode || '102';
-    if (params.prefCodes && params.prefCodes.length > 0) {
-      effectiveAreaCode = params.prefCodes.join(',');
-    } else if (params.prefCode) {
-      effectiveAreaCode = params.prefCode;
-    }
+    const effectiveAreaCode = params.areaCode || '102';
 
     // ソート順のAPIマッピング
     let apiSort = 'evaluation';
@@ -258,7 +248,7 @@ const RakutenGoraAPI = (() => {
       queryParams.append('plan2Sum', '1');
     }
 
-    // キャディ付
+    // キャディ
     if (params.playStyle === 'caddy') {
       queryParams.append('planCaddy', '1');
     }
@@ -276,12 +266,6 @@ const RakutenGoraAPI = (() => {
 
     if (params.minPrice) queryParams.append('minPrice', params.minPrice);
     if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
-
-    // プログラム中のReferer設定（コメントアウト）
-    // const appUrl = params.appUrl || getStoredAppUrl() || '';
-    // if (appUrl) {
-    //   queryParams.append('customReferer', appUrl);
-    // }
 
     // GitHub Pagesなどの本番静的ホスティング環境では楽天APIエンドポイントへ直接リクエスト、
     // ローカル開発環境(localhost/127.0.0.1)ではローカルプロキシ(/api/plan-search)経由でリクエスト
@@ -321,12 +305,16 @@ const RakutenGoraAPI = (() => {
     return data.Items.map(item => item.Item);
   }
 
-  // 都道府県コードと都道府県名のマッピング
+  // 都道府県コードと都道府県名のマッピング（全国対応）
   const PREF_NAMES_BY_CODE = {
-    '12': '千葉県', '11': '埼玉県', '14': '神奈川県', '8': '茨城県',
-    '9': '栃木県', '10': '群馬県', '13': '東京都',
-    '19': '山梨県', '20': '長野県', '15': '新潟県',
-    '22': '静岡県', '23': '愛知県', '21': '岐阜県', '24': '三重県'
+    '1': '北海道', '2': '青森県', '3': '岩手県', '4': '宮城県', '5': '秋田県', '6': '山形県', '7': '福島県',
+    '8': '茨城県', '9': '栃木県', '10': '群馬県', '11': '埼玉県', '12': '千葉県', '13': '東京都', '14': '神奈川県',
+    '15': '新潟県', '16': '富山県', '17': '石川県', '18': '福井県', '19': '山梨県', '20': '長野県',
+    '21': '岐阜県', '22': '静岡県', '23': '愛知県', '24': '三重県',
+    '25': '滋賀県', '26': '京都府', '27': '大阪府', '28': '兵庫県', '29': '奈良県', '30': '和歌山県',
+    '31': '鳥取県', '32': '島根県', '33': '岡山県', '34': '広島県', '35': '山口県',
+    '36': '徳島県', '37': '香川県', '38': '愛媛県', '39': '高知県',
+    '40': '福岡県', '41': '佐賀県', '42': '長崎県', '43': '熊本県', '44': '大分県', '45': '宮崎県', '46': '鹿児島県', '47': '沖縄県'
   };
 
   /**
@@ -351,6 +339,7 @@ const RakutenGoraAPI = (() => {
       const golfCourse = item.golfCourse || item;
       const planInfoList = item.planInfo || [];
 
+      const courseId = String(golfCourse.golfCourseId || item.golfCourseId || '');
       const courseName = golfCourse.golfCourseName || '';
       const courseAbbr = golfCourse.golfCourseAbbr || '';
       const address = golfCourse.address || '';
@@ -373,12 +362,24 @@ const RakutenGoraAPI = (() => {
         : (params.prefCode ? [params.prefCode] : []);
       if (activePrefCodes.length > 0) {
         const itemPrefCode = String(golfCourse.prefCode || '');
-        const matchedByCode = activePrefCodes.includes(itemPrefCode);
+        const matchedByPrefCode = itemPrefCode && activePrefCodes.includes(itemPrefCode);
+
+        // courseId（例: 120015 -> 千葉12, 110032 -> 埼玉11, 80006 -> 茨城8）によるマッチング
+        const matchedByCourseId = activePrefCodes.some(code => {
+          if (code.length === 2 && courseId.startsWith(code)) return true;
+          if (code.length === 1 && courseId.startsWith(code + '0')) return true;
+          return false;
+        });
+
+        // 住所文字列（「千葉県」「埼玉」「神奈川」等）によるマッチング
         const matchedByAddress = activePrefCodes.some(code => {
           const prefName = PREF_NAMES_BY_CODE[code];
-          return prefName && address.includes(prefName.replace(/[都府県]$/, ''));
+          if (!prefName) return false;
+          const shortName = prefName.replace(/[都府県]$/, '');
+          return address.includes(shortName);
         });
-        if (!matchedByCode && !matchedByAddress) {
+
+        if (!matchedByPrefCode && !matchedByCourseId && !matchedByAddress) {
           return;
         }
       }
