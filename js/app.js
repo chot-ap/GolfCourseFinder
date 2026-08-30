@@ -107,9 +107,9 @@ function startApp() {
     { code: '11', name: '11時台以降' }
   ];
 
-  // 都道府県マスターデータ（エリア別）
+  // 都道府県マスターデータ（楽天GORA公式大エリアコード別）
   const PREFECTURES_BY_AREA = {
-    '8': [ // 関東
+    '102': [ // 関東のすべて
       { code: '12', name: '千葉県' },
       { code: '11', name: '埼玉県' },
       { code: '14', name: '神奈川県' },
@@ -118,16 +118,59 @@ function startApp() {
       { code: '10', name: '群馬県' },
       { code: '13', name: '東京都' }
     ],
-    '9': [ // 甲信越
-      { code: '19', name: '山梨県' },
-      { code: '20', name: '長野県' },
-      { code: '15', name: '新潟県' }
-    ],
-    '10': [ // 東海・中部
+    '104': [ // 中部のすべて
       { code: '22', name: '静岡県' },
       { code: '23', name: '愛知県' },
       { code: '21', name: '岐阜県' },
       { code: '24', name: '三重県' }
+    ],
+    '103': [ // 甲信越・北陸
+      { code: '19', name: '山梨県' },
+      { code: '20', name: '長野県' },
+      { code: '15', name: '新潟県' },
+      { code: '16', name: '富山県' },
+      { code: '17', name: '石川県' },
+      { code: '18', name: '福井県' }
+    ],
+    '105': [ // 近畿のすべて
+      { code: '25', name: '滋賀県' },
+      { code: '26', name: '京都府' },
+      { code: '27', name: '大阪府' },
+      { code: '28', name: '兵庫県' },
+      { code: '29', name: '奈良県' },
+      { code: '30', name: '和歌山県' }
+    ],
+    '101': [ // 北海道・東北
+      { code: '1', name: '北海道' },
+      { code: '2', name: '青森県' },
+      { code: '3', name: '岩手県' },
+      { code: '4', name: '宮城県' },
+      { code: '5', name: '秋田県' },
+      { code: '6', name: '山形県' },
+      { code: '7', name: '福島県' }
+    ],
+    '106': [ // 中国のすべて
+      { code: '31', name: '鳥取県' },
+      { code: '32', name: '島根県' },
+      { code: '33', name: '岡山県' },
+      { code: '34', name: '広島県' },
+      { code: '35', name: '山口県' }
+    ],
+    '107': [ // 四国のすべて
+      { code: '36', name: '徳島県' },
+      { code: '37', name: '香川県' },
+      { code: '38', name: '愛媛県' },
+      { code: '39', name: '高知県' }
+    ],
+    '108': [ // 九州・沖縄のすべて
+      { code: '40', name: '福岡県' },
+      { code: '41', name: '佐賀県' },
+      { code: '42', name: '長崎県' },
+      { code: '43', name: '熊本県' },
+      { code: '44', name: '大分県' },
+      { code: '45', name: '宮崎県' },
+      { code: '46', name: '鹿児島県' },
+      { code: '47', name: '沖縄県' }
     ]
   };
 
@@ -155,7 +198,7 @@ function startApp() {
   function getSearchParams() {
     return {
       playDate: inputPlayDate.value || formatDate(selectedDate),
-      areaCode: selectArea ? (selectArea.value || '8') : '8',
+      areaCode: selectArea ? (selectArea.value || '102') : '102',
       prefCodes: selectedPrefCodes,
       startTimes: selectedStartTimes,
       minRating: selectMinRating ? parseFloat(selectMinRating.value || 3.5) : 3.5,
@@ -477,7 +520,7 @@ function startApp() {
     });
 
     btnSelectAllPrefs.addEventListener('click', () => {
-      const area = selectArea.value || '8';
+      const area = selectArea.value || '102';
       const prefs = PREFECTURES_BY_AREA[area] || [];
       selectedPrefCodes = prefs.map(p => p.code);
       renderPrefPicklistOptions();
@@ -512,7 +555,7 @@ function startApp() {
   }
 
   function renderPrefPicklistOptions() {
-    const area = selectArea.value || '8';
+    const area = selectArea.value || '102';
     const prefs = PREFECTURES_BY_AREA[area] || [];
 
     prefPicklistOptions.innerHTML = '';
@@ -547,7 +590,7 @@ function startApp() {
   }
 
   function updatePrefPicklistUI() {
-    const area = selectArea.value || '8';
+    const area = selectArea.value || '102';
     const allPrefs = PREFECTURES_BY_AREA[area] || [];
     const areaName = selectArea.options[selectArea.selectedIndex]?.text || '';
 
