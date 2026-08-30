@@ -916,15 +916,25 @@ function startApp() {
     }
   }
 
+  let currentSearchAbortController = null;
+
   /**
    * 検索の実行
    */
   async function performSearch() {
+    // 進行中の古い検索リクエストがあれば即座にキャンセル（通信詰まり解消）
+    if (currentSearchAbortController) {
+      currentSearchAbortController.abort();
+    }
+    currentSearchAbortController = new AbortController();
+    const currentSignal = currentSearchAbortController.signal;
+
     loadingState.style.display = 'flex';
     emptyState.style.display = 'none';
     resultsTable.style.display = 'none';
 
     const params = getSearchParams();
+    params.signal = currentSignal;
 
     lastSearchParams = { ...params };
     lastSearchTime = new Date().toLocaleString('ja-JP');
@@ -934,6 +944,12 @@ function startApp() {
 
     try {
       const results = await RakutenGoraAPI.searchPlans(params);
+
+      // 他の新しい検索リクエストが開始されていた場合は結果描画をスキップ
+      if (currentSignal.aborted) {
+        return;
+      }
+
       currentResults = results;
 
       loadingState.style.display = 'none';
@@ -952,6 +968,10 @@ function startApp() {
         sortAndRenderTable();
       }
     } catch (err) {
+      if (err.name === 'AbortError' || currentSignal.aborted) {
+        // キャンセルされた場合は何もしない
+        return;
+      }
       console.error(err);
       loadingState.style.display = 'none';
       emptyState.style.display = 'flex';

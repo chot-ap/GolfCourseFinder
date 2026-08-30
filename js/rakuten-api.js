@@ -100,10 +100,15 @@ const RakutenGoraAPI = (() => {
     }
 
     try {
-      // 楽天GORAプラン検索APIでは、大エリアコード（関東=102等）を指定して一括取得し、
-      // クライアント側でgolfCourseId・住所・prefCodeを用いて高速・正確に都道府県フィルタリングを行う。
-      // これにより、API側ルーティングによる0件返却および429レートリミットを100%防止。
-      const effectiveAreaCode = params.areaCode || '102';
+      // 検索対象のエリアコードを決定:
+      // - 都道府県選択時（例: 千葉=12, 埼玉+千葉=11,12）: 楽天APIがピンポイントで超高速に該当県のみを検索
+      // - 都道府県未選択時（例: 関東全体）: 親エリアコード（関東=102）で検索
+      let effectiveAreaCode = params.areaCode || '102';
+      if (params.prefCodes && params.prefCodes.length > 0) {
+        effectiveAreaCode = params.prefCodes.join(',');
+      } else if (params.prefCode) {
+        effectiveAreaCode = params.prefCode;
+      }
 
       // 単一リクエストで一括取得（429レートリミットを100%防止）
       const rawItems = await fetchSingleQuery(appId, accessKey, { ...params, areaCode: effectiveAreaCode });
@@ -120,6 +125,10 @@ const RakutenGoraAPI = (() => {
       const uniqueItems = Array.from(courseMap.values());
       return processAndFilterCourses(uniqueItems, params);
     } catch (err) {
+      if (err.name === 'AbortError') {
+        console.log('検索リクエストが新しい操作によりキャンセルされました');
+        return [];
+      }
       console.warn('API呼び出し失敗。デモデータにフォールバックします:', err);
       const fallbackResults = await simulateSearch(params);
       fallbackResults._apiError = err.message;
@@ -138,7 +147,12 @@ const RakutenGoraAPI = (() => {
     const appId = rawAppId || 'YOUR_APPLICATION_ID';
     const accessKey = rawAccessKey || 'YOUR_ACCESS_KEY';
 
-    const effectiveAreaCode = params.areaCode || '102';
+    let effectiveAreaCode = params.areaCode || '102';
+    if (params.prefCodes && params.prefCodes.length > 0) {
+      effectiveAreaCode = params.prefCodes.join(',');
+    } else if (params.prefCode) {
+      effectiveAreaCode = params.prefCode;
+    }
 
     // ソート順のAPIマッピング
     let apiSort = 'evaluation';
@@ -280,7 +294,11 @@ const RakutenGoraAPI = (() => {
     console.log(`🌐 [楽天OpenAPIリクエスト] 送信先 (${isLocalhost ? 'LocalProxy' : 'DirectOpenAPI'}): ${targetUrl}`);
 
     let data;
-    const proxyResp = await fetch(targetUrl);
+    const fetchOptions = {};
+    if (params.signal) {
+      fetchOptions.signal = params.signal;
+    }
+    const proxyResp = await fetch(targetUrl, fetchOptions);
     
     if (proxyResp.ok) {
       data = await proxyResp.json();
