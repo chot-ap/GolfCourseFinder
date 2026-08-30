@@ -100,11 +100,12 @@ const RakutenGoraAPI = (() => {
     }
 
     try {
-      // 楽天GORAプラン検索APIでは、都道府県コードも広域エリアコードもすべて areaCode に指定する仕様。
-      // 単一都道府県選択時はそのコード(例: 千葉=12)、複数県選択時または未選択時は親エリアコード(関東=8)で1回リクエスト。
+      // 楽天GORAプラン検索APIでは、areaCodeフィールドはCSV形式（カンマ区切り）で複数指定可能。
+      // 例: 埼玉(11)と千葉(12)を選択した場合 -> areaCode=11,12
+      // 都道府県未選択時 -> 親エリアコード (例: 関東なら areaCode=8)
       let effectiveAreaCode = params.areaCode || '8';
-      if (params.prefCodes && params.prefCodes.length === 1) {
-        effectiveAreaCode = params.prefCodes[0];
+      if (params.prefCodes && params.prefCodes.length > 0) {
+        effectiveAreaCode = params.prefCodes.join(',');
       } else if (params.prefCode) {
         effectiveAreaCode = params.prefCode;
       }
@@ -143,8 +144,8 @@ const RakutenGoraAPI = (() => {
     const accessKey = rawAccessKey || 'YOUR_ACCESS_KEY';
 
     let effectiveAreaCode = params.areaCode || '8';
-    if (params.prefCodes && params.prefCodes.length === 1) {
-      effectiveAreaCode = params.prefCodes[0];
+    if (params.prefCodes && params.prefCodes.length > 0) {
+      effectiveAreaCode = params.prefCodes.join(',');
     } else if (params.prefCode) {
       effectiveAreaCode = params.prefCode;
     }
