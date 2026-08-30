@@ -65,6 +65,9 @@ class GolfCourseHandler(http.server.SimpleHTTPRequestHandler):
         if not custom_referer or 'localhost' in custom_referer or '127.0.0.1' in custom_referer:
             custom_referer = custom_referer if (custom_referer and 'localhost' not in custom_referer and '127.0.0.1' not in custom_referer) else 'https://example.com/'
 
+        if custom_referer and not (custom_referer.startswith('http://') or custom_referer.startswith('https://')):
+            custom_referer = f"https://{custom_referer}"
+
         # 楽天API宛のリクエストURLから内部パラメータ（customReferer）を除外
         rakuten_params = {k: v for k, v in parsed_params.items() if k != 'customReferer'}
         clean_query = urllib.parse.urlencode(rakuten_params, doseq=True)
