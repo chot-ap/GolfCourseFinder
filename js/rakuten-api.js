@@ -100,17 +100,21 @@ const RakutenGoraAPI = (() => {
     }
 
     try {
-      // 複数県が選択されている場合、各県ごとに並行リクエストを実行して統合
-      const prefCodes = params.prefCodes && params.prefCodes.length > 0 
-        ? params.prefCodes 
-        : (params.prefCode ? [params.prefCode] : ['']);
+      // 楽天GORAプラン検索APIでは、都道府県コードも広域エリアコードもすべて areaCode に指定する仕様。
+      // 単一都道府県選択時はそのコード(例: 千葉=12)、複数県選択時または未選択時は親エリアコード(関東=8)で1回リクエスト。
+      let effectiveAreaCode = params.areaCode || '8';
+      if (params.prefCodes && params.prefCodes.length === 1) {
+        effectiveAreaCode = params.prefCodes[0];
+      } else if (params.prefCode) {
+        effectiveAreaCode = params.prefCode;
+      }
 
-      const fetchPromises = prefCodes.map(pref => fetchSingleQuery(appId, accessKey, { ...params, prefCode: pref }));
-      const resultsArray = await Promise.all(fetchPromises);
+      // 単一リクエストで一括取得（429レートリミットを100%防止）
+      const rawItems = await fetchSingleQuery(appId, accessKey, { ...params, areaCode: effectiveAreaCode });
 
       // 全結果のフラット化と重複排除（courseIdベース）
       const courseMap = new Map();
-      resultsArray.flat().forEach(item => {
+      rawItems.forEach(item => {
         const id = item.golfCourse ? item.golfCourse.golfCourseId : item.golfCourseId;
         if (id && !courseMap.has(id)) {
           courseMap.set(id, item);
@@ -138,85 +142,81 @@ const RakutenGoraAPI = (() => {
     const appId = rawAppId || 'YOUR_APPLICATION_ID';
     const accessKey = rawAccessKey || 'YOUR_ACCESS_KEY';
 
-    const prefCodes = params.prefCodes && params.prefCodes.length > 0 
-      ? params.prefCodes 
-      : (params.prefCode ? [params.prefCode] : ['']);
+    let effectiveAreaCode = params.areaCode || '8';
+    if (params.prefCodes && params.prefCodes.length === 1) {
+      effectiveAreaCode = params.prefCodes[0];
+    } else if (params.prefCode) {
+      effectiveAreaCode = params.prefCode;
+    }
 
-    return prefCodes.map(pref => {
-      // ソート順のAPIマッピング（車/電車時間ソートはAPI取得後にクライアントで実行）
-      let apiSort = 'evaluation';
-      if (params.sort === 'price') {
-        apiSort = 'price';
-      } else if (params.sort === 'standard') {
-        apiSort = 'standard';
-      }
+    // ソート順のAPIマッピング
+    let apiSort = 'evaluation';
+    if (params.sort === 'price') {
+      apiSort = 'price';
+    } else if (params.sort === 'standard') {
+      apiSort = 'standard';
+    }
 
-      // 除外プラン（NGPlan）の構築
-      const ngPlans = ['planHalfRound', 'planLesson', 'planOpenCompe'];
-      if (!params.includeStay) {
-        ngPlans.push('planStay'); // 宿泊プラン除外が有効（デフォルト）
-      }
+    // 除外プラン（NGPlan）の構築
+    const ngPlans = ['planHalfRound', 'planLesson', 'planOpenCompe'];
+    if (!params.includeStay) {
+      ngPlans.push('planStay'); // 宿泊プラン除外が有効（デフォルト）
+    }
 
-      const queryParams = new URLSearchParams({
-        applicationId: appId,
-        accessKey: accessKey,
-        format: 'json',
-        playDate: params.playDate || '',
-        hits: '30',
-        page: params.page || '1',
-        sort: apiSort,
-        NGPlan: ngPlans.join(',')
-      });
-
-      if (pref) {
-        queryParams.append('prefCode', pref);
-      } else if (params.areaCode) {
-        queryParams.append('areaCode', params.areaCode);
-      }
-
-      // キーワード検索（ゴルフ場名など）
-      if (params.keyword && params.keyword.trim()) {
-        queryParams.append('keyword', params.keyword.trim());
-      }
-
-      // 2サム保証・割増なし
-      if (params.plan2Sum) {
-        queryParams.append('plan2Sum', '1');
-      }
-
-      // プレースタイル（キャディ付き）
-      if (params.playStyle === 'caddy') {
-        queryParams.append('planCaddy', '1');
-      }
-
-      // 時間帯
-      if (params.startTimes && Array.isArray(params.startTimes) && params.startTimes.length > 0) {
-        const sortedTimes = [...params.startTimes].map(t => parseInt(t, 10)).sort((a, b) => a - b);
-        const minHour = sortedTimes[0];
-        const maxHour = sortedTimes[sortedTimes.length - 1];
-        queryParams.append('startTime', String(minHour).padStart(2, '0'));
-        queryParams.append('endTime', String(maxHour).padStart(2, '0'));
-      } else if (params.startTime) {
-        queryParams.append('startTime', params.startTime);
-      }
-
-      if (params.minPrice) queryParams.append('minPrice', params.minPrice);
-      if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
-
-      const queryString = queryParams.toString();
-      const directUrl = `${PLAN_SEARCH_ENDPOINT}?${queryString}`;
-      const proxyUrl = `/api/plan-search?${queryString}`;
-
-      return {
-        prefCode: pref,
-        directUrl,
-        proxyUrl,
-        queryString,
-        hasAppId: !!rawAppId,
-        hasAccessKey: !!rawAccessKey,
-        paramsObject: Object.fromEntries(queryParams.entries())
-      };
+    const queryParams = new URLSearchParams({
+      applicationId: appId,
+      accessKey: accessKey,
+      format: 'json',
+      playDate: params.playDate || '',
+      hits: '30',
+      page: params.page || '1',
+      sort: apiSort,
+      NGPlan: ngPlans.join(','),
+      areaCode: effectiveAreaCode
     });
+
+    // キーワード検索（ゴルフ場名など）
+    if (params.keyword && params.keyword.trim()) {
+      queryParams.append('keyword', params.keyword.trim());
+    }
+
+    // 2サム保証・割増なし
+    if (params.plan2Sum) {
+      queryParams.append('plan2Sum', '1');
+    }
+
+    // プレースタイル（キャディ付き）
+    if (params.playStyle === 'caddy') {
+      queryParams.append('planCaddy', '1');
+    }
+
+    // 時間帯
+    if (params.startTimes && Array.isArray(params.startTimes) && params.startTimes.length > 0) {
+      const sortedTimes = [...params.startTimes].map(t => parseInt(t, 10)).sort((a, b) => a - b);
+      const minHour = sortedTimes[0];
+      const maxHour = sortedTimes[sortedTimes.length - 1];
+      queryParams.append('startTime', String(minHour).padStart(2, '0'));
+      queryParams.append('endTime', String(maxHour).padStart(2, '0'));
+    } else if (params.startTime) {
+      queryParams.append('startTime', params.startTime);
+    }
+
+    if (params.minPrice) queryParams.append('minPrice', params.minPrice);
+    if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
+
+    const queryString = queryParams.toString();
+    const directUrl = `${PLAN_SEARCH_ENDPOINT}?${queryString}`;
+    const proxyUrl = `/api/plan-search?${queryString}`;
+
+    return [{
+      areaCode: effectiveAreaCode,
+      directUrl,
+      proxyUrl,
+      queryString,
+      hasAppId: !!rawAppId,
+      hasAccessKey: !!rawAccessKey,
+      paramsObject: Object.fromEntries(queryParams.entries())
+    }];
   }
 
   /**
@@ -243,14 +243,9 @@ const RakutenGoraAPI = (() => {
       hits: '30',
       page: params.page || '1',
       sort: apiSort,
-      NGPlan: ngPlans.join(',')
+      NGPlan: ngPlans.join(','),
+      areaCode: params.areaCode || '8'
     });
-
-    if (params.prefCode) {
-      queryParams.append('prefCode', params.prefCode);
-    } else if (params.areaCode) {
-      queryParams.append('areaCode', params.areaCode);
-    }
 
     // キーワード
     if (params.keyword && params.keyword.trim()) {
@@ -305,6 +300,9 @@ const RakutenGoraAPI = (() => {
     if (proxyResp.ok) {
       data = await proxyResp.json();
     } else {
+      if (proxyResp.status === 429) {
+        throw new Error('短時間のアクセス制限 (HTTP 429: Too Many Requests) が発生しました。数秒待ってから再試行してください。');
+      }
       const errJson = await proxyResp.json().catch(() => ({}));
       let errDetail = `HTTP ${proxyResp.status}`;
       if (errJson.errors && errJson.errors.errorMessage) {
@@ -321,6 +319,14 @@ const RakutenGoraAPI = (() => {
 
     return data.Items.map(item => item.Item);
   }
+
+  // 都道府県コードと都道府県名のマッピング
+  const PREF_NAMES_BY_CODE = {
+    '12': '千葉県', '11': '埼玉県', '14': '神奈川県', '8': '茨城県',
+    '9': '栃木県', '10': '群馬県', '13': '東京都',
+    '19': '山梨県', '20': '長野県', '15': '新潟県',
+    '22': '静岡県', '23': '愛知県', '21': '岐阜県', '24': '三重県'
+  };
 
   /**
    * ゴルフ場データのフィルタリングおよび交通時間の付与
@@ -364,8 +370,14 @@ const RakutenGoraAPI = (() => {
       const activePrefCodes = params.prefCodes && params.prefCodes.length > 0
         ? params.prefCodes
         : (params.prefCode ? [params.prefCode] : []);
-      if (activePrefCodes.length > 0 && golfCourse.prefCode) {
-        if (!activePrefCodes.includes(String(golfCourse.prefCode))) {
+      if (activePrefCodes.length > 0) {
+        const itemPrefCode = String(golfCourse.prefCode || '');
+        const matchedByCode = activePrefCodes.includes(itemPrefCode);
+        const matchedByAddress = activePrefCodes.some(code => {
+          const prefName = PREF_NAMES_BY_CODE[code];
+          return prefName && address.includes(prefName.replace(/[都府県]$/, ''));
+        });
+        if (!matchedByCode && !matchedByAddress) {
           return;
         }
       }
