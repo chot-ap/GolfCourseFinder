@@ -100,15 +100,18 @@ const RakutenGoraAPI = (() => {
     }
 
     try {
-      // 検索対象のエリアコードを決定:
-      // - 都道府県選択時（例: 千葉=12, 埼玉+千葉=11,12）: 楽天APIがピンポイントで超高速に該当県のみを検索
-      // - 都道府県未選択時（例: 関東全体）: 親エリアコード（関東=102）で検索
-      let effectiveAreaCode = params.areaCode || '102';
-      if (params.prefCodes && params.prefCodes.length > 0) {
-        effectiveAreaCode = params.prefCodes.join(',');
-      } else if (params.prefCode) {
-        effectiveAreaCode = params.prefCode;
+      // エリアコードは必ず都道府県コードを1つ以上指定
+      const prefCodes = params.prefCodes && params.prefCodes.length > 0
+        ? params.prefCodes
+        : (params.prefCode ? [params.prefCode] : []);
+
+      if (prefCodes.length === 0) {
+        const noPrefResults = [];
+        noPrefResults._noPrefError = true;
+        return noPrefResults;
       }
+
+      const effectiveAreaCode = prefCodes.join(',');
 
       // 単一リクエストで一括取得（429レートリミットを100%防止）
       const rawItems = await fetchSingleQuery(appId, accessKey, { ...params, areaCode: effectiveAreaCode });
@@ -147,38 +150,38 @@ const RakutenGoraAPI = (() => {
     const appId = rawAppId || 'YOUR_APPLICATION_ID';
     const accessKey = rawAccessKey || 'YOUR_ACCESS_KEY';
 
-    let effectiveAreaCode = params.areaCode || '102';
-    if (params.prefCodes && params.prefCodes.length > 0) {
-      effectiveAreaCode = params.prefCodes.join(',');
-    } else if (params.prefCode) {
-      effectiveAreaCode = params.prefCode;
-    }
+    const prefCodes = params.prefCodes && params.prefCodes.length > 0
+      ? params.prefCodes
+      : (params.prefCode ? [params.prefCode] : []);
 
-    // ソート順のAPIマッピング
-    let apiSort = 'evaluation';
-    if (params.sort === 'price') {
-      apiSort = 'price';
-    } else if (params.sort === 'standard') {
-      apiSort = 'standard';
-    }
+    const effectiveAreaCode = prefCodes.join(',');
 
-    // 除外プラン（NGPlan）の構築
-    const ngPlans = ['planHalfRound', 'planLesson', 'planOpenCompe'];
-    if (!params.includeStay) {
-      ngPlans.push('planStay'); // 宿泊プラン除外が有効（デフォルト）
-    }
+    // 時間帯指定 (startTimeZone: CSV形式, 0/空は指定なし)
+    const validTimeZones = (params.startTimes || [])
+      .filter(t => t !== '0' && t !== 0 && t !== '');
+    const startTimeZoneValue = validTimeZones.length > 0 ? validTimeZones.join(',') : '';
 
     const queryParams = new URLSearchParams({
       applicationId: appId,
       accessKey: accessKey,
       format: 'json',
       playDate: params.playDate || '',
+      areaCode: effectiveAreaCode,
       hits: '30',
-      page: params.page || '1',
-      sort: apiSort,
-      NGPlan: ngPlans.join(','),
-      areaCode: effectiveAreaCode
+      page: '1',
+      sort: params.sort || 'evaluation',
+      minPrice: params.minPrice || '10000',
+      planCart: '1',
+      planStay: params.includeStay ? '1' : '0',
+      planLunch: '1',
+      NGPlan: 'planLesson,planOpenCompe,planRegularCompe,planHalfRound',
+      shapeWideFairway: '1',
+      icDistance: '4'
     });
+
+    if (startTimeZoneValue) {
+      queryParams.append('startTimeZone', startTimeZoneValue);
+    }
 
     // キーワード検索（ゴルフ場名など）
     if (params.keyword && params.keyword.trim()) {
@@ -195,18 +198,6 @@ const RakutenGoraAPI = (() => {
       queryParams.append('planCaddy', '1');
     }
 
-    // 時間帯
-    if (params.startTimes && Array.isArray(params.startTimes) && params.startTimes.length > 0) {
-      const sortedTimes = [...params.startTimes].map(t => parseInt(t, 10)).sort((a, b) => a - b);
-      const minHour = sortedTimes[0];
-      const maxHour = sortedTimes[sortedTimes.length - 1];
-      queryParams.append('startTime', String(minHour).padStart(2, '0'));
-      queryParams.append('endTime', String(maxHour).padStart(2, '0'));
-    } else if (params.startTime) {
-      queryParams.append('startTime', params.startTime);
-    }
-
-    if (params.minPrice) queryParams.append('minPrice', params.minPrice);
     if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
 
     const queryString = queryParams.toString();
@@ -228,29 +219,38 @@ const RakutenGoraAPI = (() => {
    * 単一クエリのAPIリクエスト実行
    */
   async function fetchSingleQuery(appId, accessKey, params) {
-    let apiSort = 'evaluation';
-    if (params.sort === 'price') {
-      apiSort = 'price';
-    } else if (params.sort === 'standard') {
-      apiSort = 'standard';
-    }
+    const prefCodes = params.prefCodes && params.prefCodes.length > 0
+      ? params.prefCodes
+      : (params.prefCode ? [params.prefCode] : (params.areaCode ? [params.areaCode] : []));
 
-    const ngPlans = ['planHalfRound', 'planLesson', 'planOpenCompe'];
-    if (!params.includeStay) {
-      ngPlans.push('planStay');
-    }
+    const effectiveAreaCode = prefCodes.join(',');
+
+    // 時間帯指定 (startTimeZone: CSV形式)
+    const validTimeZones = (params.startTimes || [])
+      .filter(t => t !== '0' && t !== 0 && t !== '');
+    const startTimeZoneValue = validTimeZones.length > 0 ? validTimeZones.join(',') : '';
 
     const queryParams = new URLSearchParams({
       applicationId: appId,
       accessKey: accessKey,
       format: 'json',
       playDate: params.playDate, // YYYY-MM-DD
+      areaCode: effectiveAreaCode,
       hits: '30',
-      page: params.page || '1',
-      sort: apiSort,
-      NGPlan: ngPlans.join(','),
-      areaCode: params.areaCode || '102'
+      page: '1',
+      sort: params.sort || 'evaluation',
+      minPrice: params.minPrice || '10000',
+      planCart: '1',
+      planStay: params.includeStay ? '1' : '0',
+      planLunch: '1',
+      NGPlan: 'planLesson,planOpenCompe,planRegularCompe,planHalfRound',
+      shapeWideFairway: '1',
+      icDistance: '4'
     });
+
+    if (startTimeZoneValue) {
+      queryParams.append('startTimeZone', startTimeZoneValue);
+    }
 
     // キーワード
     if (params.keyword && params.keyword.trim()) {
@@ -267,18 +267,6 @@ const RakutenGoraAPI = (() => {
       queryParams.append('planCaddy', '1');
     }
 
-    // 複数選択された時間帯からAPIの開始・終了時間を設定
-    if (params.startTimes && Array.isArray(params.startTimes) && params.startTimes.length > 0) {
-      const sortedTimes = [...params.startTimes].map(t => parseInt(t, 10)).sort((a, b) => a - b);
-      const minHour = sortedTimes[0];
-      const maxHour = sortedTimes[sortedTimes.length - 1];
-      queryParams.append('startTime', String(minHour).padStart(2, '0'));
-      queryParams.append('endTime', String(maxHour).padStart(2, '0'));
-    } else if (params.startTime) {
-      queryParams.append('startTime', params.startTime);
-    }
-
-    if (params.minPrice) queryParams.append('minPrice', params.minPrice);
     if (params.maxPrice) queryParams.append('maxPrice', params.maxPrice);
 
     // GitHub Pagesなどの本番静的ホスティング環境では楽天APIエンドポイントへ直接リクエスト、

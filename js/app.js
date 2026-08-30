@@ -91,20 +91,27 @@ function startApp() {
   let selectedDate = new Date();
   let calCurrentYear = selectedDate.getFullYear();
   let calCurrentMonth = selectedDate.getMonth(); // 0-indexed
-  let selectedPrefCodes = []; // 選択された都道府県コード（空配列なら全県）
-  let selectedStartTimes = ['08', '09']; // デフォルト選択時間帯
+  let selectedPrefCodes = ['12']; // 初期値: 千葉県 (必ず1つ以上選択)
+  let selectedStartTimes = ['8', '9']; // デフォルト選択時間帯 (8時台, 9時台)
   let lastSearchParams = null;
   let lastSearchTime = null;
   let lastSearchMode = '';
 
-  // 時間帯マスターデータ
+  // 時間帯マスターデータ (新仕様: startTimeZone)
   const TIME_SLOTS = [
-    { code: '06', name: '〜06時台 (早朝)' },
-    { code: '07', name: '07時台' },
-    { code: '08', name: '08時台' },
-    { code: '09', name: '09時台' },
+    { code: '0', name: '指定しない' },
+    { code: '4', name: '4時台' },
+    { code: '5', name: '5時台' },
+    { code: '6', name: '6時台' },
+    { code: '7', name: '7時台' },
+    { code: '8', name: '8時台' },
+    { code: '9', name: '9時台' },
     { code: '10', name: '10時台' },
-    { code: '11', name: '11時台以降' }
+    { code: '11', name: '11時台' },
+    { code: '12', name: '12時台' },
+    { code: '13', name: '13時台' },
+    { code: '14', name: '14時台' },
+    { code: '15', name: '15時台以降' }
   ];
 
   // 都道府県マスターデータ（楽天GORA公式大エリアコード別）
@@ -643,7 +650,8 @@ function startApp() {
 
     if (btnSelectAllTimes) {
       btnSelectAllTimes.addEventListener('click', () => {
-        selectedStartTimes = TIME_SLOTS.map(t => t.code);
+        // 4〜15時台を全選択
+        selectedStartTimes = TIME_SLOTS.filter(t => t.code !== '0').map(t => t.code);
         renderTimePicklistOptions();
         updateTimePicklistUI();
         performSearch();
@@ -652,7 +660,7 @@ function startApp() {
 
     if (btnClearAllTimes) {
       btnClearAllTimes.addEventListener('click', () => {
-        selectedStartTimes = [];
+        selectedStartTimes = ['0'];
         renderTimePicklistOptions();
         updateTimePicklistUI();
         performSearch();
@@ -694,12 +702,22 @@ function startApp() {
 
       checkbox.addEventListener('change', () => {
         if (checkbox.checked) {
-          if (!selectedStartTimes.includes(t.code)) {
-            selectedStartTimes.push(t.code);
-            selectedStartTimes.sort();
+          if (t.code === '0') {
+            // 「指定しない」が選ばれたら他を解除
+            selectedStartTimes = ['0'];
+          } else {
+            // 他の時間帯が選ばれたら「0」を解除
+            selectedStartTimes = selectedStartTimes.filter(c => c !== '0');
+            if (!selectedStartTimes.includes(t.code)) {
+              selectedStartTimes.push(t.code);
+              selectedStartTimes.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+            }
           }
         } else {
           selectedStartTimes = selectedStartTimes.filter(c => c !== t.code);
+          if (selectedStartTimes.length === 0) {
+            selectedStartTimes = ['0'];
+          }
         }
         renderTimePicklistOptions();
         updateTimePicklistUI();
@@ -718,28 +736,31 @@ function startApp() {
     if (!timePicklistPlaceholder) return;
     if (selectedTimeTags) selectedTimeTags.innerHTML = '';
 
-    if (selectedStartTimes.length === 0) {
+    const isNoSpecificTime = selectedStartTimes.length === 0 || 
+                             selectedStartTimes.includes('0') || 
+                             selectedStartTimes.length === (TIME_SLOTS.length - 1);
+
+    if (isNoSpecificTime) {
       timePicklistPlaceholder.textContent = 'すべての時間帯（指定なし）';
       if (selectedTimesSummary) selectedTimesSummary.textContent = '時間帯: 全時間帯（指定なし）';
-    } else if (selectedStartTimes.length === TIME_SLOTS.length) {
-      timePicklistPlaceholder.textContent = 'すべての時間帯 (全選択)';
-      if (selectedTimesSummary) selectedTimesSummary.textContent = '時間帯: すべての時間帯';
     } else {
-      const selectedNames = TIME_SLOTS
-        .filter(t => selectedStartTimes.includes(t.code))
-        .map(t => t.name.split(' ')[0]);
+      const selectedSlots = TIME_SLOTS.filter(t => t.code !== '0' && selectedStartTimes.includes(t.code));
+      const selectedNames = selectedSlots.map(t => t.name.split(' ')[0]);
 
       timePicklistPlaceholder.textContent = `${selectedNames.join(', ')}`;
       if (selectedTimesSummary) selectedTimesSummary.textContent = `時間帯: ${selectedNames.join(', ')}`;
 
       // タグ表示
-      TIME_SLOTS.filter(t => selectedStartTimes.includes(t.code)).forEach(t => {
+      selectedSlots.forEach(t => {
         const tag = document.createElement('span');
         tag.className = 'selected-time-tag';
         tag.innerHTML = `${t.name} <span class="btn-remove-tag" title="削除">✕</span>`;
         tag.querySelector('.btn-remove-tag').addEventListener('click', (e) => {
           e.stopPropagation();
           selectedStartTimes = selectedStartTimes.filter(c => c !== t.code);
+          if (selectedStartTimes.length === 0) {
+            selectedStartTimes = ['0'];
+          }
           renderTimePicklistOptions();
           updateTimePicklistUI();
           performSearch();
@@ -961,6 +982,16 @@ function startApp() {
         emptyState.style.display = 'flex';
         resultsTable.style.display = 'none';
         resultsCount.textContent = '0';
+
+        const emptyTitle = emptyState.querySelector('h3');
+        const emptyDesc = emptyState.querySelector('p');
+        if (results._noPrefError) {
+          if (emptyTitle) emptyTitle.textContent = '📍 都道府県を1つ以上選択してください';
+          if (emptyDesc) emptyDesc.textContent = '検索を実行するには、上の「都道府県」ピックリストから1つ以上の県を選択してください。';
+        } else {
+          if (emptyTitle) emptyTitle.textContent = '該当するプランが見つかりませんでした';
+          if (emptyDesc) emptyDesc.textContent = '条件を緩和するか、別の日程・時間帯・エリアでお試しください。';
+        }
       } else {
         emptyState.style.display = 'none';
         resultsTable.style.display = 'table';
