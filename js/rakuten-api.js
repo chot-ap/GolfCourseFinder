@@ -545,12 +545,12 @@ const RakutenGoraAPI = (() => {
       // 神田からの車所要時間の計算
       const carTransit = TransitCalculator.calculateCarTransitTime(golfCourse);
 
-      // クラブバス送迎ステータス判定
-      const clubBusStatus = TransitCalculator.parseClubBusStatus(golfCourse.clubBus);
+      // クラブバス送迎ステータス判定（マスタデータ照合）
+      const clubBusStatus = TransitCalculator.getClubBusInfo(golfCourse);
 
       // 【クラブバス運行限定フィルター】
       if (clubBusOnly) {
-        if (clubBusStatus.status !== 'あり' && clubBusStatus.status !== '要予約') {
+        if (!clubBusStatus.hasClubBus && clubBusStatus.status !== 'あり' && clubBusStatus.status !== '要予約') {
           return;
         }
       }

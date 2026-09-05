@@ -198,7 +198,7 @@ function startApp() {
   /**
    * 初期化処理
    */
-  function init() {
+  async function init() {
     initDatePicker();
     initCalendarWidget();
     initPrefecturePicklist();
@@ -206,6 +206,9 @@ function startApp() {
     initAdvancedSearch();
     initEventListeners();
     updateApiStatusDisplay();
+
+    // クラブバスマスタデータを事前ロード
+    await TransitCalculator.loadMasterData();
 
     // 初回検索実行
     performSearch();
@@ -1350,6 +1353,51 @@ function startApp() {
       plansHtml = '<div style="color: var(--text-muted); font-size: 0.85rem;">楽天GORAで最新の空き枠プランをご確認ください。</div>';
     }
 
+    const master = course.clubBus.masterData;
+    let busSectionHtml = '';
+
+    if (master && master.hasClubBus) {
+      const morningTimes = master.morningTimetable && master.morningTimetable.length > 0
+        ? master.morningTimetable.map(t => `<span style="display: inline-block; background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; margin: 2px;">${t}</span>`).join(' ')
+        : '要問合せ';
+
+      busSectionHtml = `
+        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 0.85rem; margin-top: 0.75rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+            <div style="font-weight: 700; font-size: 0.85rem; color: #34d399;">🚌 クラブバス運行ダイヤ・アクセス情報</div>
+            <span class="badge-bus ${course.clubBus.badgeClass}">${master.reservationType || '定期運行'}</span>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary); display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.4rem; margin-bottom: 0.5rem;">
+            <div><strong>発着駅:</strong> ${master.railwayLine ? master.railwayLine + ' ' : ''}${master.departureStation || '---'}${master.departureExit ? ' (' + master.departureExit + ')' : ''}</div>
+            <div><strong>バス所要時間:</strong> 約${master.busTransitMinutes || '--'}分</div>
+            <div><strong>運行区分:</strong> ${master.operationType || '---'}</div>
+            <div><strong>予約締切:</strong> ${master.reservationDeadline || '予約不要'}</div>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem;">
+            <strong>朝の運行便:</strong> ${morningTimes}
+          </div>
+          ${master.returnBusInfo ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem;"><strong>復路（帰り便）:</strong> ${master.returnBusInfo}</div>` : ''}
+          ${master.notes ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem;">※ ${master.notes}</div>` : ''}
+        </div>
+      `;
+    } else if (master && !master.hasClubBus) {
+      busSectionHtml = `
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass); border-radius: 8px; padding: 0.75rem; margin-top: 0.75rem;">
+          <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.3rem;">🚕 クラブバスなし（タクシー・車アクセス）</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary);">
+            最寄駅: ${master.railwayLine ? master.railwayLine + ' ' : ''}${master.departureStation || '最寄駅'}よりタクシー約${master.taxiTransitMinutes || 15}分（目安: ${master.taxiApproxFare || '---'}）
+          </div>
+          ${master.notes ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">※ ${master.notes}</div>` : ''}
+        </div>
+      `;
+    } else {
+      busSectionHtml = `
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass); border-radius: 8px; padding: 0.75rem; margin-top: 0.75rem;">
+          <div style="font-size: 0.85rem; color: var(--text-secondary);"><strong>クラブバス:</strong> ${course.clubBus.detail}</div>
+        </div>
+      `;
+    }
+
     modalContent.innerHTML = `
       <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 240px;">
@@ -1358,7 +1406,6 @@ function startApp() {
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>住所:</strong> ${course.address}</p>
           <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>高速道路:</strong> ${course.highway || '最寄IC情報あり'}</p>
-          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>クラブバス:</strong> ${course.clubBus.detail}</p>
         </div>
         <div style="flex: 1; min-width: 240px; background: rgba(16, 185, 129, 0.05); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-glass-bright);">
           <div style="font-size: 0.8rem; font-weight: 700; color: var(--primary-light); margin-bottom: 0.5rem;">📍 交通アクセス所要時間</div>
@@ -1366,6 +1413,8 @@ function startApp() {
           <div style="font-size: 0.85rem;">🚗 <strong>神田から（車）:</strong> ${course.carTransit.text} (${course.carTransit.detail})</div>
         </div>
       </div>
+
+      ${busSectionHtml}
 
       <div style="margin-top: 1rem;">
         <h4 style="font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem;">空きプラン・料金</h4>

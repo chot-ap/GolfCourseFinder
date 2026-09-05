@@ -103,6 +103,124 @@ const TransitCalculator = (() => {
     return estimateByPrefecture(address, 'car');
   }
 
+  // クラブバスマスタデータのキャッシュ
+  let clubBusMasterData = {};
+  let masterDataLoaded = false;
+
+  /**
+   * クラブバスマスタデータの非同期読み込み
+   */
+  async function loadMasterData() {
+    if (masterDataLoaded && Object.keys(clubBusMasterData).length > 0) {
+      return clubBusMasterData;
+    }
+
+    try {
+      const response = await fetch('./data/club_bus_master.json');
+      if (response.ok) {
+        clubBusMasterData = await response.json();
+        masterDataLoaded = true;
+        console.log(`[TransitCalculator] クラブバスマスタデータを正常にロードしました (${Object.keys(clubBusMasterData).length}件)`);
+      } else {
+        console.warn(`[TransitCalculator] マスタデータのロードに失敗しました (HTTP ${response.status})。フォールバック処理を継続します。`);
+      }
+    } catch (e) {
+      console.warn('[TransitCalculator] マスタデータ取得エラー (フォールバック処理を継続します):', e);
+    }
+    return clubBusMasterData;
+  }
+
+  /**
+   * ゴルフ場情報からマスタデータを参照してクラブバス情報を取得
+   * @param {Object|number|string} courseInfo ゴルフ場情報オブジェクトまたはゴルフ場ID
+   * @returns {Object} クラブバス解析結果
+   */
+  function getClubBusInfo(courseInfo) {
+    if (!courseInfo) {
+      return parseClubBusStatus(null);
+    }
+
+    let targetCourseId = '';
+    let courseName = '';
+
+    if (typeof courseInfo === 'object') {
+      targetCourseId = String(courseInfo.golfCourseId || courseInfo.id || '');
+      courseName = courseInfo.golfCourseName || courseInfo.name || courseInfo.golfCourseAbbr || '';
+    } else {
+      targetCourseId = String(courseInfo);
+    }
+
+    // 1. golfCourseId による完全一致検索
+    if (targetCourseId && clubBusMasterData[targetCourseId]) {
+      const master = clubBusMasterData[targetCourseId];
+      return formatMasterBusInfo(master);
+    }
+
+    // 2. コース名による名寄せ検索
+    if (courseName && Object.keys(clubBusMasterData).length > 0) {
+      const cleanName = courseName.replace(/[\s　・]/g, '');
+      for (const id in clubBusMasterData) {
+        const item = clubBusMasterData[id];
+        const masterName = (item.golfCourseName || '').replace(/[\s　・]/g, '');
+        if (masterName && (cleanName.includes(masterName) || masterName.includes(cleanName))) {
+          return formatMasterBusInfo(item);
+        }
+      }
+    }
+
+    // 3. マスタ未登録の場合は既存テキスト/住所からのフォールバック判定
+    const rawClubBus = typeof courseInfo === 'object' ? (courseInfo.clubBus || courseInfo.golfCourseCaption || '') : '';
+    return parseClubBusStatus(rawClubBus);
+  }
+
+  /**
+   * マスタデータオブジェクトを表示用フォーマットに変換
+   */
+  function formatMasterBusInfo(master) {
+    if (!master.hasClubBus) {
+      const taxiInfo = master.departureStation 
+        ? `${master.departureStation}よりタクシー約${master.taxiTransitMinutes || 15}分`
+        : 'タクシー等をご利用ください';
+      return {
+        hasClubBus: false,
+        status: 'なし',
+        text: 'なし',
+        detail: master.notes || `クラブバス運行なし（${taxiInfo}）`,
+        badgeClass: 'badge-none',
+        masterData: master
+      };
+    }
+
+    const isReserve = master.reservationType && master.reservationType.includes('予約');
+    const status = isReserve ? '要予約' : 'あり';
+    const badgeClass = isReserve ? 'badge-reserve' : 'badge-available';
+    
+    let text = 'あり';
+    if (master.departureStation) {
+      text = isReserve ? `あり（${master.departureStation}発・要予約）` : `あり（${master.departureStation}発）`;
+    }
+
+    let detail = `${master.operationType || '運行'} | ${master.reservationType || '定期運行'}`;
+    if (master.departureStation) {
+      detail += ` | ${master.departureStation}${master.departureExit ? '（' + master.departureExit + '）' : ''}発（所要約${master.busTransitMinutes || 15}分）`;
+    }
+    if (master.morningTimetable && master.morningTimetable.length > 0) {
+      detail += ` | 朝便: ${master.morningTimetable.join(', ')}`;
+    }
+    if (master.notes) {
+      detail += ` | ${master.notes}`;
+    }
+
+    return {
+      hasClubBus: true,
+      status: status,
+      text: text,
+      detail: detail,
+      badgeClass: badgeClass,
+      masterData: master
+    };
+  }
+
   /**
    * 笹塚駅からの電車の所要時間を推定
    * @param {Object} courseInfo ゴルフ場情報
@@ -112,11 +230,9 @@ const TransitCalculator = (() => {
     const lat = parseFloat(courseInfo.latitude);
     const lng = parseFloat(courseInfo.longitude);
     const address = courseInfo.address || '';
-    const clubBus = courseInfo.clubBus || '';
+    const busInfo = getClubBusInfo(courseInfo);
+    const master = busInfo.masterData;
 
-    // 笹塚から新宿駅まで約5分（京王線）
-    // 各ターミナル駅へのアクセス：東京駅まで中央快速で約14分（笹塚から約25分）
-    
     if (!isNaN(lat) && !isNaN(lng) && lat > 0 && lng > 0) {
       const dist = calculateDistance(ORIGIN_SASAZUKA.lat, ORIGIN_SASAZUKA.lng, lat, lng);
       let estimatedMinutes = 0;
@@ -124,11 +240,9 @@ const TransitCalculator = (() => {
 
       if (address.includes('千葉県')) {
         if (address.includes('市原') || address.includes('木更津') || address.includes('君津') || address.includes('袖ケ浦')) {
-          // 笹塚〜新宿〜東京〜内房線特急さざなみ/快速 ＋ バス・タクシー
           estimatedMinutes = Math.round(30 + (dist * 0.8) + 15);
           routeSummary = '笹塚〜新宿/東京〜内房線・最寄駅';
         } else if (address.includes('成田') || address.includes('印西') || address.includes('佐倉') || address.includes('八街')) {
-          // 笹塚〜新宿〜日暮里〜京成スカイライナー/総武快速 ＋ バス・タクシー
           estimatedMinutes = Math.round(28 + (dist * 0.75) + 15);
           routeSummary = '笹塚〜新宿/日暮里〜成田・総武線方面';
         } else {
@@ -137,7 +251,6 @@ const TransitCalculator = (() => {
         }
       } else if (address.includes('埼玉県')) {
         if (address.includes('東松山') || address.includes('川越') || address.includes('坂戸') || address.includes('秩父')) {
-          // 笹塚〜新宿〜池袋〜東武東上線/西武線 ＋ バス・タクシー
           estimatedMinutes = Math.round(25 + (dist * 0.7) + 15);
           routeSummary = '笹塚〜新宿/池袋〜東武東上線・西武線';
         } else {
@@ -145,27 +258,21 @@ const TransitCalculator = (() => {
           routeSummary = '笹塚〜新宿〜湘南新宿・高崎線方面';
         }
       } else if (address.includes('神奈川県')) {
-        // 笹塚〜新宿〜小田急線急行/ロマンスカー or 東海道線 ＋ バス・タクシー
         estimatedMinutes = Math.round(20 + (dist * 0.75) + 15);
         routeSummary = '笹塚〜新宿〜小田急線・東海道線方面';
       } else if (address.includes('茨城県')) {
-        // 笹塚〜新宿〜秋葉原〜TX または 東京/上野〜特急ひたち/ときわ ＋ バス・タクシー
         estimatedMinutes = Math.round(30 + (dist * 0.72) + 15);
         routeSummary = '笹塚〜新宿/上野〜常磐線特急・TX方面';
       } else if (address.includes('栃木県')) {
-        // 笹塚〜新宿〜大宮〜新幹線/宇都宮線 または 東武特急スペーシア ＋ バス・タクシー
         estimatedMinutes = Math.round(30 + (dist * 0.65) + 20);
         routeSummary = '笹塚〜新宿〜湘南新宿/東武特急/新幹線';
       } else if (address.includes('群馬県')) {
-        // 笹塚〜新宿〜高崎線/新幹線 ＋ バス・タクシー
         estimatedMinutes = Math.round(30 + (dist * 0.65) + 20);
         routeSummary = '笹塚〜新宿〜高崎線・新幹線方面';
       } else if (address.includes('山梨県')) {
-        // 笹塚〜新宿〜中央本線特急あずさ/かいじ ＋ バス・タクシー
         estimatedMinutes = Math.round(20 + (dist * 0.68) + 15);
         routeSummary = '笹塚〜新宿〜中央線特急方面';
       } else if (address.includes('静岡県')) {
-        // 笹塚〜新宿〜品川〜新幹線/東海道線 ＋ バス・タクシー
         estimatedMinutes = Math.round(30 + (dist * 0.65) + 20);
         routeSummary = '笹塚〜新宿/品川〜東海道新幹線方面';
       } else {
@@ -173,8 +280,17 @@ const TransitCalculator = (() => {
         routeSummary = '笹塚〜ターミナル駅経由';
       }
 
-      // クラブバスがある場合は接続がスムーズ（約5分短縮）
-      if (hasClubBus(clubBus)) {
+      // マスタデータの発着駅・路線情報による詳細化と補正
+      if (master) {
+        if (master.departureStation && master.railwayLine) {
+          const transMins = master.hasClubBus ? (master.busTransitMinutes || 15) : (master.taxiTransitMinutes || 15);
+          const transType = master.hasClubBus ? 'クラブバス' : 'タクシー';
+          routeSummary = `笹塚〜${master.railwayLine}・${master.departureStation}（${transType}約${transMins}分）`;
+        }
+        if (master.hasClubBus) {
+          estimatedMinutes = Math.max(40, estimatedMinutes - 5);
+        }
+      } else if (busInfo.hasClubBus) {
         estimatedMinutes = Math.max(45, estimatedMinutes - 5);
       }
 
@@ -193,13 +309,14 @@ const TransitCalculator = (() => {
   }
 
   /**
-   * クラブバスの有無・運行情報の解析
+   * クラブバスの有無・運行情報の解析（フォールバック用）
    * @param {string|Object} clubBusInfo クラブバス情報
-   * @returns {Object} { status: 'あり'|'なし'|'要予約'|'要問合せ', text: string, detail: string, badgeClass: string }
+   * @returns {Object} { hasClubBus: boolean, status: 'あり'|'なし'|'要予約'|'要問合せ', text: string, detail: string, badgeClass: string }
    */
   function parseClubBusStatus(clubBusInfo) {
     if (!clubBusInfo) {
       return {
+        hasClubBus: false,
         status: 'なし',
         text: 'なし',
         detail: 'クラブバス運行なし（タクシー等をご利用ください）',
@@ -211,6 +328,7 @@ const TransitCalculator = (() => {
 
     if (infoStr.includes('運行なし') || infoStr.includes('なし') || infoStr.includes('ありません') || infoStr.trim() === '') {
       return {
+        hasClubBus: false,
         status: 'なし',
         text: 'なし',
         detail: 'クラブバスの運行はありません',
@@ -219,10 +337,10 @@ const TransitCalculator = (() => {
     }
 
     if (infoStr.includes('要予約') || infoStr.includes('完全予約制') || infoStr.includes('事前予約')) {
-      // 駅名を抽出
       const stationMatch = infoStr.match(/([^\s,、。]+駅)/);
       const station = stationMatch ? `（${stationMatch[1]}発・要予約）` : '（要予約）';
       return {
+        hasClubBus: true,
         status: '要予約',
         text: `あり ${station}`,
         detail: infoStr,
@@ -234,6 +352,7 @@ const TransitCalculator = (() => {
       const stationMatch = infoStr.match(/([^\s,、。]+駅)/);
       const station = stationMatch ? `（${stationMatch[1]}発）` : '';
       return {
+        hasClubBus: true,
         status: 'あり',
         text: `あり ${station}`.trim(),
         detail: infoStr,
@@ -242,6 +361,7 @@ const TransitCalculator = (() => {
     }
 
     return {
+      hasClubBus: false,
       status: '要問合せ',
       text: '要問合せ',
       detail: infoStr,
@@ -254,9 +374,11 @@ const TransitCalculator = (() => {
    */
   function hasClubBus(clubBusInfo) {
     if (!clubBusInfo) return false;
-    const str = typeof clubBusInfo === 'string' ? clubBusInfo : JSON.stringify(clubBusInfo);
-    if (str.includes('なし') || str.includes('運行なし')) return false;
-    return str.includes('あり') || str.includes('運行') || str.includes('駅');
+    if (typeof clubBusInfo === 'object' && typeof clubBusInfo.hasClubBus === 'boolean') {
+      return clubBusInfo.hasClubBus;
+    }
+    const info = getClubBusInfo(clubBusInfo);
+    return info.hasClubBus;
   }
 
   /**
@@ -287,6 +409,8 @@ const TransitCalculator = (() => {
   }
 
   return {
+    loadMasterData,
+    getClubBusInfo,
     calculateCarTransitTime,
     calculateTrainTransitTime,
     parseClubBusStatus,
